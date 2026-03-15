@@ -2,12 +2,10 @@ agetty-tty1
 agetty-tty2
 bluetoothd
 chrony
-current
 dbus
 dhcpcd
 mullvad
 seatd
 sshd
-supervise
 udevd
 wpa_supplicant

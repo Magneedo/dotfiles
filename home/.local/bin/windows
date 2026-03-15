@@ -9,7 +9,11 @@ QMP="$VM/qmp.sock"
 PID="$VM/qemu.pid"
 
 WINUSER="${1:-${WINUSER:-Brendyn}}"
-WINPASS="${WINPASS:-BrendynM103!}"
+if [ -r "$HOME/.config/windows-rdp.env" ]; then
+  # shellcheck disable=SC1090
+  . "$HOME/.config/windows-rdp.env"
+fi
+: "${WINPASS:?WINPASS must be set in env or ~/.config/windows-rdp.env}"
 PORT="${PORT:-3390}"
 
 PIN_CPUS="${PIN_CPUS:-8-15}"
@@ -22,11 +26,12 @@ FREERDP_LOG_LEVEL="${FREERDP_LOG_LEVEL:-${LOG_LEVEL:-ERROR}}"
 if command -v xprop >/dev/null 2>&1; then
   mkdir -p "$VM/.shim/bin"
   REAL_XPROP="$(command -v xprop)"
-  cat > "$VM/.shim/bin/xprop" <<EOF
+  cat > "$VM/.shim/bin/xprop" <<'EOS'
 #!/bin/sh
-[ -z "\${DISPLAY:-}" ] && exit 0
-exec "$REAL_XPROP" "\$@"
-EOF
+[ -z "${DISPLAY:-}" ] && exit 0
+exec "__REAL_XPROP__" "$@"
+EOS
+  sed -i "s|__REAL_XPROP__|$REAL_XPROP|" "$VM/.shim/bin/xprop"
   chmod +x "$VM/.shim/bin/xprop"
   export PATH="$VM/.shim/bin:$PATH"
 fi

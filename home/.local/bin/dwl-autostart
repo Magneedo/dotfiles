@@ -36,6 +36,6 @@ foot --server >/dev/null 2>&1 &
   stdbuf -oL -eL "$HOME/.local/bin/statusd" | while IFS= read -r line; do
     dwlb -status all "$line"
   done
-) >/tmp/dwlb-status.log 2>&1 &
+) >"${XDG_RUNTIME_DIR:-/tmp}/dwlb-status.log" 2>&1 &
 
 exec dwlb

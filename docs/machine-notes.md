@@ -14,15 +14,4 @@
 - Hibernate via `/sys/power/state`
 
 ## Core services enabled
-- agetty-tty1
-- agetty-tty2
-- bluetoothd
-- chrony
-- dbus
-- dhcpcd
-- mullvad
-- seatd
-- sshd
-- udevd
-- wpa_supplicant
-
+- See `docs/runit-enabled-services.txt` (canonical list).

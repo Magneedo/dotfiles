@@ -61,6 +61,6 @@ ${c0}      /\`'.,\     ${lc}KERNEL:${ic}${kernel}${reset}
 ${c0}     /     ',    ${lc}UPTIME:${ic}${uptime}${reset}
 ${c0}    /      ,\`\   ${lc}PACKAGES:${ic}${packages}${reset}
 ${c0}   /   ,.'\`.  \  ${lc}${uitype}:${ic}${ui}${reset}
-${c0}  /.,'\`     \`'.\
+${c0}  /.,'\`     \`'.\\
 
 EOF

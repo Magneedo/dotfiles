@@ -1,0 +1,13 @@
+# /dev/nvme0n1p2 LABEL=ArtixRoot
+UUID=2494dfa9-40f9-4fa6-81c0-cd52fe409939	/         	btrfs     	rw,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2,commit=120,subvol=/@	0 0
+
+# /dev/nvme0n1p2 LABEL=ArtixRoot
+UUID=2494dfa9-40f9-4fa6-81c0-cd52fe409939	/.snapshots	btrfs     	rw,noatime,compress=zstd:3,ssd,discard=async,space_cache=v2,commit=120,subvol=/@snapshots	0 0
+
+# /dev/nvme0n1p1
+UUID=804A-F33C      	/boot     	vfat      	rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=ascii,shortname=mixed,utf8,errors=remount-ro	0 2
+
+# /dev/nvme0n1p3
+UUID=9690a06b-8520-437a-ac0e-bd9753fa5f3a none swap defaults,discard=once,pri=100 0 0
+
+

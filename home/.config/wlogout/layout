@@ -1,0 +1,24 @@
+{
+	"label": "lock",
+	"action": "/usr/local/bin/lock",
+	"text": "lock",
+	"keybind": "l"
+}
+{
+	"label": "hibernate",
+	"action": "/usr/local/bin/hibernate",
+	"text": "hibernate",
+	"keybind": "h"
+}
+{
+	"label": "reboot",
+	"action": "/usr/local/bin/reboot",
+	"text": "reboot",
+	"keybind": "r"
+}
+{
+	"label": "poweroff",
+	"action": "/usr/local/bin/poweroff",
+	"text": "poweroff",
+	"keybind": "p"
+}

@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+WALLDIR="$HOME/Pictures/Wallpapers"
+INTERVAL=900
+MODE="shuffle"
+
+XDG="${XDG_RUNTIME_DIR:-/tmp}"
+DISP="${WAYLAND_DISPLAY:-wayland-0}"
+SOCK="$XDG/$DISP"
+
+mkdir -p "$XDG"
+while [ ! -S "$SOCK" ]; do sleep 0.1; done
+
+exec 9>"$XDG/wallbgd.lock"
+flock -n 9 || exit 0
+
+load_files() {
+  mapfile -d '' -t FILES < <(
+    find "$WALLDIR" -maxdepth 1 -type f \( \
+      -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' -o -iname '*.gif' -o -iname '*.bmp' \
+    \) -print0
+  )
+  [ "${#FILES[@]}" -gt 0 ] || exit 1
+}
+
+shuffle_queue() {
+  mapfile -d '' -t QUEUE < <(printf '%s\0' "${FILES[@]}" | shuf -z)
+  idx=0
+}
+
+pick_image() {
+  case "$MODE" in
+    shuffle)
+      if [ "${idx:-0}" -ge "${#QUEUE[@]}" ]; then
+        load_files
+        shuffle_queue
+      fi
+      img="${QUEUE[$idx]}"
+      idx=$((idx + 1))
+      ;;
+    random)
+      img="${FILES[$((RANDOM % ${#FILES[@]}))]}"
+      ;;
+    *) exit 2 ;;
+  esac
+}
+
+bgpid=""
+apply() {
+  [ -n "$bgpid" ] && kill "$bgpid" 2>/dev/null || true
+  swaybg -i "$img" -m fill >/dev/null 2>&1 &
+  bgpid="$!"
+}
+
+load_files
+[ "$MODE" = shuffle ] && shuffle_queue
+pick_image; apply
+
+while sleep "$INTERVAL"; do
+  pick_image
+  apply
+done
+

@@ -1,0 +1,49 @@
+set preview true
+set previewer ~/.config/lf/scope
+set ratios 1:3
+set drawbox false
+set showbinds true
+set hidden false
+set info size:time
+set dircounts true
+
+set promptfmt "h updir  j/k move  l open  gg/G top/end  / search  <space> select  v invert  u unselect  y copy  d cut  c clear  p paste  . hidden  DEL trash  D delete %S %w"
+
+set statfmt "\033[36m%p\033[0m| %c| %u| %g| -> %l"
+set rulerfmt " %i/%t | %P "
+
+cmd open &{{
+    case $(file --mime-type -Lb -- "$f") in
+        text/*|application/json|application/xml|application/x-shellscript|inode/x-empty)
+            lf -remote "send $id \$vim \$fx"
+            ;;
+        image/*)
+            swayimg "$f" >/dev/null 2>&1 &
+            ;;
+        application/pdf)
+            zathura "$f" >/dev/null 2>&1 &
+            ;;
+        *)
+            $OPENER "$f" >/dev/null 2>&1 &
+            ;;
+    esac
+}}
+
+cmd trash ${{
+    mkdir -p ~/.trash
+    IFS="$(printf '\n\t')"
+    mv -- $fx ~/.trash/
+}}
+
+cmd delete ${{
+    IFS="$(printf '\n\t')"
+    printf '%s\n' $fx
+    printf 'delete permanently? [y/N] '
+    read -r ans </dev/tty
+    [ "$ans" = "y" ] && rm -rf -- $fx
+}}
+
+map l open
+map <delete> trash
+map D delete
+map . set hidden!

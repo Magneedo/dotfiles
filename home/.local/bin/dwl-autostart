@@ -1,0 +1,41 @@
+#!/bin/sh
+set -eu
+
+dbus-update-activation-environment --all WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP XDG_RUNTIME_DIR >/dev/null 2>&1 || true
+
+command -v brightnessctl >/dev/null 2>&1 && brightnessctl set 10% >/dev/null 2>&1 || true
+command -v wlr-randr >/dev/null 2>&1 && wlr-randr --output DP-1 --mode 2560x1440@143.972000 >/dev/null 2>&1 || true
+
+pgrep -x pipewire >/dev/null 2>&1 || pipewire >/dev/null 2>&1 &
+
+XDG="${XDG_RUNTIME_DIR:-/tmp}"
+i=0
+while [ ! -S "$XDG/pipewire-0" ] && [ $i -lt 40 ]; do
+  i=$((i+1))
+  sleep 0.05
+done
+
+pgrep -x wireplumber >/dev/null 2>&1 || wireplumber >/dev/null 2>&1 &
+pgrep -x pipewire-pulse >/dev/null 2>&1 || pipewire-pulse >/dev/null 2>&1 &
+
+if command -v wpctl >/dev/null 2>&1; then
+  wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.50 >/dev/null 2>&1 || true
+  wpctl set-mute @DEFAULT_AUDIO_SINK@ 0 >/dev/null 2>&1 || true
+fi
+
+pgrep -x xdg-desktop-portal >/dev/null 2>&1 || /usr/lib/xdg-desktop-portal --replace >/dev/null 2>&1 &
+pgrep -x xdg-desktop-portal-wlr >/dev/null 2>&1 || /usr/lib/xdg-desktop-portal-wlr >/dev/null 2>&1 &
+
+foot --server >/dev/null 2>&1 &
+"$HOME/.local/bin/wallpaper" >/dev/null 2>&1 &
+
+(
+  while ! pgrep -x dwlb >/dev/null 2>&1; do
+    sleep 0.05
+  done
+  stdbuf -oL -eL "$HOME/.local/bin/statusd" | while IFS= read -r line; do
+    dwlb -status all "$line"
+  done
+) >/tmp/dwlb-status.log 2>&1 &
+
+exec dwlb

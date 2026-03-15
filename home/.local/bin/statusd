@@ -1,0 +1,125 @@
+#!/bin/sh
+set -eu
+
+pick_backlight() {
+  for p in /sys/class/backlight/*; do
+    [ -r "$p/max_brightness" ] && { echo "$p"; return 0; }
+  done
+  return 1
+}
+
+pick_battery() {
+  for p in /sys/class/power_supply/*; do
+    [ -r "$p/type" ] || continue
+    [ "$(cat "$p/type" 2>/dev/null || true)" = "Battery" ] && { echo "$p"; return 0; }
+  done
+  return 1
+}
+
+BACKLIGHT_DIR="$(pick_backlight 2>/dev/null || true)"
+BAT_DIR="$(pick_battery 2>/dev/null || true)"
+
+bright_pct() {
+  [ -n "${BACKLIGHT_DIR:-}" ] || { printf "n/a"; return; }
+  max="$(cat "$BACKLIGHT_DIR/max_brightness" 2>/dev/null || echo 0)"
+  cur_file="$BACKLIGHT_DIR/actual_brightness"
+  [ -f "$cur_file" ] || cur_file="$BACKLIGHT_DIR/brightness"
+  cur="$(cat "$cur_file" 2>/dev/null || echo 0)"
+  [ "$max" -gt 0 ] 2>/dev/null || { printf "0%%"; return; }
+  printf "%d%%" $((cur * 100 / max))
+}
+
+bat_str() {
+  [ -n "${BAT_DIR:-}" ] || { printf "n/a"; return; }
+  if [ -r "$BAT_DIR/capacity" ]; then
+    printf "%s%%" "$(cat "$BAT_DIR/capacity" 2>/dev/null || echo n/a)"
+  else
+    printf "n/a"
+  fi
+}
+
+vol_str() {
+  command -v wpctl >/dev/null 2>&1 || { printf "n/a"; return; }
+  out="$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null || true)"
+  [ -n "$out" ] || { printf "n/a"; return; }
+  printf "%s\n" "$out" | grep -q '\[MUTED\]' && { printf "mu"; return; }
+  v="$(printf "%s\n" "$out" | awk '{print $2}' 2>/dev/null || true)"
+  [ -n "$v" ] || { printf "n/a"; return; }
+  awk -v x="$v" 'BEGIN{printf "%d%%", x * 100 + 0.5}'
+}
+
+rfkill_airplane() {
+  have_all=0
+  all_soft=0
+  wlan_soft=0
+  bt_soft=0
+  for path in /sys/class/rfkill/*; do
+    [ -d "$path" ] || continue
+    t="$(cat "$path/type" 2>/dev/null || true)"
+    s="$(cat "$path/soft" 2>/dev/null || echo 0)"
+    case "$t" in
+      all) have_all=1; [ "$s" = 1 ] && all_soft=1 ;;
+      wlan) [ "$s" = 1 ] && wlan_soft=1 ;;
+      bluetooth) [ "$s" = 1 ] && bt_soft=1 ;;
+    esac
+  done
+  if [ "$have_all" -eq 1 ] && [ "$all_soft" -eq 1 ]; then return 0; fi
+  if [ "$wlan_soft" -eq 1 ] && [ "$bt_soft" -eq 1 ]; then return 0; fi
+  return 1
+}
+
+default_iface() {
+  ip -o route show default 2>/dev/null \
+    | awk '{
+        dev=""; metric=999999;
+        for (i=1;i<=NF;i++){
+          if ($i=="dev"){ dev=$(i+1) }
+          if ($i=="metric"){ metric=$(i+1) }
+        }
+        if (dev!="") print metric, dev
+      }' \
+    | sort -n \
+    | head -n1 \
+    | awk '{print $2}'
+}
+
+ssid_from_wpa() {
+  command -v wpa_cli >/dev/null 2>&1 || return 1
+  wpa_cli -i "$1" status 2>/dev/null | sed -n 's/^ssid=//p' | head -n1
+}
+
+wifi_profile_fallback() {
+  if [ -r /etc/runit/sv/wpa_supplicant/conf ]; then
+    conf_file="$(sed -n 's/^CONF_FILE=//p' /etc/runit/sv/wpa_supplicant/conf | head -n1 || true)"
+    [ -n "${conf_file:-}" ] && basename "${conf_file%.conf}" && return 0
+  fi
+  return 1
+}
+
+net_str() {
+  if rfkill_airplane; then printf "✈"; return; fi
+  iface="$(default_iface 2>/dev/null || true)"
+  [ -n "${iface:-}" ] || { printf "off"; return; }
+  case "$iface" in
+    eth*|en*|enx*) printf "eth" ;;
+    wl*|wlan*)
+      ssid="$(ssid_from_wpa "$iface" 2>/dev/null || true)"
+      [ -n "${ssid:-}" ] && printf "%s" "$ssid" || wifi_profile_fallback || printf "wifi"
+      ;;
+    *) printf "%s" "$iface" ;;
+  esac
+}
+
+time_str() {
+  date +"%b %-d, %-I:%M %p"
+}
+
+print_status() {
+  printf "[ bat %s | bri %s | vol %s | net %s | %s ]\n" \
+    "$(bat_str)" "$(bright_pct)" "$(vol_str)" "$(net_str)" "$(time_str)"
+}
+
+while :; do
+  print_status
+  sleep 1 
+done

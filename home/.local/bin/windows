@@ -1,0 +1,96 @@
+#!/bin/sh
+set -eu
+
+VM="${VM:-$HOME/VM/Windows}"
+DISK="$VM/disk.qcow2"
+OVMF_CODE="/usr/share/edk2-ovmf/x64/OVMF_CODE.4m.fd"
+OVMF_VARS="$VM/OVMF_VARS.fd"
+QMP="$VM/qmp.sock"
+PID="$VM/qemu.pid"
+
+WINUSER="${1:-${WINUSER:-Brendyn}}"
+WINPASS="${WINPASS:-BrendynM103!}"
+PORT="${PORT:-3390}"
+
+PIN_CPUS="${PIN_CPUS:-8-15}"
+
+FREERDP_LOG_LEVEL="${FREERDP_LOG_LEVEL:-${LOG_LEVEL:-ERROR}}"
+
+[ -f "$DISK" ] || { echo "No disk: $DISK"; exit 2; }
+[ -f "$OVMF_VARS" ] || cp /usr/share/edk2-ovmf/x64/OVMF_VARS.4m.fd "$OVMF_VARS"
+
+if command -v xprop >/dev/null 2>&1; then
+  mkdir -p "$VM/.shim/bin"
+  REAL_XPROP="$(command -v xprop)"
+  cat > "$VM/.shim/bin/xprop" <<EOF
+#!/bin/sh
+[ -z "\${DISPLAY:-}" ] && exit 0
+exec "$REAL_XPROP" "\$@"
+EOF
+  chmod +x "$VM/.shim/bin/xprop"
+  export PATH="$VM/.shim/bin:$PATH"
+fi
+
+CPUFLAGS="host,kvm=on,hv_relaxed,hv_vapic,hv_time,hv_vpindex,hv_runtime,hv_synic,hv_stimer,hv_tlbflush,hv_frequencies,hv_reenlightenment,hv_ipi"
+
+[ -f "$PID" ] && ! kill -0 "$(cat "$PID")" 2>/dev/null && rm -f "$PID" "$QMP"
+
+if ! { [ -f "$PID" ] && kill -0 "$(cat "$PID")" 2>/dev/null; }; then
+  PINCMD=""
+  taskset -c "$PIN_CPUS" true 2>/dev/null && PINCMD="taskset -c $PIN_CPUS"
+
+  $PINCMD qemu-system-x86_64 \
+    -enable-kvm \
+    -machine q35,accel=kvm \
+    -cpu "$CPUFLAGS" \
+    -smp 6 \
+    -m 8G \
+    -rtc base=localtime \
+    -display none \
+    -vga none \
+    -device virtio-gpu-pci \
+    -global kvm-pit.lost_tick_policy=discard \
+    -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+    -drive if=pflash,format=raw,file="$OVMF_VARS" \
+    -drive if=none,id=vdisk,file="$DISK",format=qcow2,cache=writeback,discard=unmap,aio=io_uring \
+    -device virtio-blk-pci,drive=vdisk \
+    -netdev user,id=n1,hostfwd=tcp:127.0.0.1:${PORT}-:3389 \
+    -device e1000e,netdev=n1 \
+    -qmp unix:"$QMP",server,nowait \
+    -pidfile "$PID" \
+    -daemonize
+fi
+
+for _ in $(seq 1 180); do
+  nc -z 127.0.0.1 "$PORT" 2>/dev/null && break
+  sleep 1
+done
+
+nc -z 127.0.0.1 "$PORT" 2>/dev/null || {
+  echo "RDP port not ready on 127.0.0.1:$PORT"
+  exit 1
+}
+
+if command -v sdl-freerdp3 >/dev/null 2>&1; then
+  RDP_BIN="sdl-freerdp3"
+elif command -v wlfreerdp3 >/dev/null 2>&1; then
+  RDP_BIN="wlfreerdp3"
+elif command -v xfreerdp3 >/dev/null 2>&1; then
+  RDP_BIN="xfreerdp3"
+else
+  echo "No FreeRDP client found (need sdl-freerdp3 / wlfreerdp3 / xfreerdp3)." >&2
+  exit 127
+fi
+
+USER_FMT=".\\$WINUSER"
+
+exec "$RDP_BIN" /args-from:stdin <<EOF
+/v:127.0.0.1:$PORT
+/u:$USER_FMT
+/p:$WINPASS
++clipboard
+/dynamic-resolution
+/cert:ignore
+/log-level:$FREERDP_LOG_LEVEL
+/auth-pkg-list:!kerberos,!u2u,ntlm
+EOF

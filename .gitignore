@@ -1,0 +1,23 @@
+*.swp
+*.swo
+*~
+*.bak
+
+.DS_Store
+
+home/.config/obs-studio/logs/
+home/.config/obs-studio/profiler_data/
+home/.config/obs-studio/plugin_manager/
+home/.config/obs-studio/plugin_config/obs-websocket/config.json
+home/.config/obs-studio/plugin_config/rtmp-services/
+
+home/.config/gh/hosts.yml
+home/.config/freerdp/certs/
+home/.config/freerdp/known_hosts2
+home/.config/pulse/
+home/.config/BraveSoftware/
+home/.config/Mullvad VPN/
+home/.config/yay/
+home/.config/QtProject.conf
+
+docs/doas-reference.txt

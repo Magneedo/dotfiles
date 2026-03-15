@@ -1,0 +1,29 @@
+#!/bin/sh
+
+file=$1
+width=${2:-80}
+height=${3:-24}
+
+[ -e "$file" ] || exit 1
+
+if [ -d "$file" ]; then
+    ls -lah --group-directories-first --color=always -- "$file"
+    exit 0
+fi
+
+mime=$(file --mime-type -Lb -- "$file")
+
+case "$mime" in
+    image/*)
+        chafa --animate=off --size="${width}x${height}" -- "$file"
+        ;;
+    text/*|application/json|application/xml|application/x-shellscript|inode/x-empty)
+        sed -n '1,200p' -- "$file"
+        ;;
+    application/pdf)
+        pdftotext -l 10 -- "$file" - 2>/dev/null | sed -n '1,200p'
+        ;;
+    *)
+        file --brief --mime -- "$file"
+        ;;
+esac

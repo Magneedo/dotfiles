@@ -1,0 +1,28 @@
+#!/bin/sh
+command -v gammastep >/dev/null 2>&1 || exit 1
+STEP=10
+MIN=1500
+MAX=6500
+DEFAULT=60
+STATE="$HOME/.local/state/bluefilter.level"
+mkdir -p "${STATE%/*}"
+L="$(cat "$STATE" 2>/dev/null || true)"
+case "$L" in
+  ''|*[!0-9]* ) L=off ;;
+  * ) [ "$L" -ge 0 ] 2>/dev/null && [ "$L" -le 100 ] 2>/dev/null || L=off ;;
+esac
+case "${1:-}" in up|down) ;; *) echo "Usage: $(basename "$0") up|down" >&2; exit 1 ;; esac
+if [ "$L" = off ]; then
+  L="$DEFAULT"
+else
+  if [ "$1" = up ]; then
+    L=$((L+STEP)); [ "$L" -gt 100 ] && L=100
+  else
+    L=$((L-STEP)); [ "$L" -lt 0 ] && L=0
+  fi
+fi
+TEMP=$((MIN + (L*(MAX-MIN))/100))
+pkill -x gammastep 2>/dev/null || true
+gammastep -P 0 -O "$TEMP"
+printf '%s' "$L" > "$STATE"
+

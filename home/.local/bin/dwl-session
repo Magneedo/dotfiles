@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+export XDG_CURRENT_DESKTOP=dwl
+export XDG_SESSION_TYPE=wayland
+export XDG_SESSION_DESKTOP=dwl
+
+uid="$(id -u)"
+
+if [ -d "/run/user/$uid" ] && [ -w "/run/user/$uid" ]; then
+  export XDG_RUNTIME_DIR="/run/user/$uid"
+else
+  export XDG_RUNTIME_DIR="/tmp/xdg-runtime-$uid"
+  mkdir -p "$XDG_RUNTIME_DIR"
+  chmod 700 "$XDG_RUNTIME_DIR"
+fi
+
+exec dbus-run-session -- dwl -s "$HOME/.local/bin/dwl-autostart"
+

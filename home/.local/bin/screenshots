@@ -4,6 +4,11 @@ dir="$HOME/Pictures/Screenshots"
 mkdir -p "$dir"
 geom="$(slurp 2>/dev/null || true)"
 [ -n "$geom" ] || exit 0
-file="$dir/screenshot-$(date +%F_%H-%M-%S).png"
-grim -g "$geom" - | tee "$file" | wl-copy -t image/png
-
+file="$(mktemp "$dir/screenshot-$(date +%F_%H-%M-%S)-XXXXXX.png")"
+if grim -g "$geom" "$file"; then
+    wl-copy -t image/png < "$file"
+else
+    status=$?
+    rm -f -- "$file"
+    exit "$status"
+fi

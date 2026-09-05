@@ -1,3 +1,3 @@
-export PATH="$HOME/.local/bin:$PATH"
+[ -r "$HOME/.profile" ] && . "$HOME/.profile"
 
 [ -r "$HOME/.bashrc" ] && . "$HOME/.bashrc"

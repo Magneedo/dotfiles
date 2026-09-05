@@ -23,6 +23,5 @@ else
 fi
 TEMP=$((MIN + (L*(MAX-MIN))/100))
 pkill -x gammastep 2>/dev/null || true
-gammastep -P 0 -O "$TEMP"
+gammastep -P -O "$TEMP" || exit $?
 printf '%s' "$L" > "$STATE"
-

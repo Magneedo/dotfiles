@@ -4,26 +4,50 @@ file=$1
 width=${2:-80}
 height=${3:-24}
 
+case "$width" in *[!0-9]*) width=80 ;; esac
+case "$height" in *[!0-9]*) height=24 ;; esac
+[ "$width" -gt 0 ] 2>/dev/null || width=80
+[ "$height" -gt 0 ] 2>/dev/null || height=24
+
 [ -e "$file" ] || exit 1
 
 if [ -d "$file" ]; then
-    ls -lah --group-directories-first --color=always -- "$file"
-    exit 0
+    ls -lah --group-directories-first --color=always -- "$file" |
+        head -n "$height"
+    exit
 fi
+
+case "$file" in
+    *.jpg|*.JPG|*.jpeg|*.JPEG|*.png|*.PNG|*.webp|*.WEBP|*.gif|*.GIF)
+        exec chafa --animate=off --size="${width}x${height}" -- "$file"
+        ;;
+    *.pdf|*.PDF)
+        pdftotext -l 10 -- "$file" - 2>/dev/null |
+            fold -w "$width" |
+            awk -v h="$height" 'NR <= h; NR == h { exit }'
+        exit
+        ;;
+esac
 
 mime=$(file --mime-type -Lb -- "$file")
 
 case "$mime" in
     image/*)
-        chafa --animate=off --size="${width}x${height}" -- "$file"
+        exec chafa --animate=off --size="${width}x${height}" -- "$file"
         ;;
+
     text/*|application/json|application/xml|application/x-shellscript|inode/x-empty)
-        sed -n '1,200p' -- "$file"
+        fold -w "$width" -- "$file" |
+            awk -v h="$height" 'NR <= h; NR == h { exit }'
         ;;
+
     application/pdf)
-        pdftotext -l 10 -- "$file" - 2>/dev/null | sed -n '1,200p'
+        pdftotext -l 10 -- "$file" - 2>/dev/null |
+            fold -w "$width" |
+            awk -v h="$height" 'NR <= h; NR == h { exit }'
         ;;
+
     *)
-        file --brief --mime -- "$file"
+        exec file --brief -- "$file"
         ;;
 esac

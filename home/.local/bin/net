@@ -62,7 +62,7 @@ if [ "$PROFILE" = "eth" ]; then
 fi
 
 CONF="/etc/wpa_supplicant/${PROFILE}.conf"
-[ -r "$CONF" ] || { echo "Missing $CONF"; exit 1; }
+[ -f "$CONF" ] || { echo "Missing $CONF"; exit 1; }
 
 # Switch away from Ethernet
 doas dhcpcd -k "$ETH_IFACE" 2>/dev/null || true

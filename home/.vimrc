@@ -8,8 +8,8 @@ set fileformats=unix,dos,mac
 set autoread
 
 augroup reload_on_focus
-      autocmd!
-        autocmd FocusGained,BufEnter * silent! checktime
+    autocmd!
+    autocmd FocusGained,BufEnter * silent! checktime
 augroup END
 
 filetype plugin indent on
@@ -47,16 +47,19 @@ set tabstop=4
 set softtabstop=4
 set autoindent
 set smartindent
-set nowrap
+
+set wrap
+set linebreak
+set breakindent
 set textwidth=0
+
 set formatoptions-=c
 set formatoptions-=r
 set formatoptions-=o
 
 augroup filetype_settings
-      autocmd!
-        autocmd FileType html,css,javascript,json,yaml,xml setlocal shiftwidth=2 tabstop=2 softtabstop=2 expandtab
-          autocmd FileType markdown,text setlocal wrap linebreak
+    autocmd!
+    autocmd FileType html,css,javascript,json,yaml,xml setlocal shiftwidth=2 tabstop=2 softtabstop=2 expandtab
 augroup END
 
 set pastetoggle=<F2>
@@ -65,7 +68,17 @@ set laststatus=0
 set showmode
 
 nnoremap <leader>w :w!<CR>
-command! W execute 'w !sudo tee % >/dev/null' | edit!
+function! WriteAsRoot()
+    if empty(expand('%'))
+        echoerr 'Give the buffer a filename before using :W'
+        return
+    endif
+    execute 'write !doas tee -- ' . shellescape(expand('%:p'), 1) . ' >/dev/null'
+    if v:shell_error == 0
+        edit!
+    endif
+endfunction
+command! W call WriteAsRoot()
 nnoremap <leader><CR> :noh<CR>
 
 nnoremap <C-j> <C-W>j
@@ -82,14 +95,15 @@ xnoremap <M-k> :m'<-2<CR>`>my`<mzgv`yo`z
 nnoremap <leader>pp :set paste!<CR>
 
 function! CleanExtraSpaces()
-      let save_cursor = getpos(".")
-        let old_query = getreg('/')
-          silent! %s/\s\+$//e
-            call setpos('.', save_cursor)
-              call setreg('/', old_query)
+    let save_cursor = getpos(".")
+    let old_query = getreg('/')
+    silent! %s/\s\+$//e
+    call setpos('.', save_cursor)
+    call setreg('/', old_query)
 endfunction
 
 augroup trim_whitespace
-      autocmd!
-        autocmd BufWritePre *.txt,*.md,*.js,*.css,*.html,*.py,*.sh,*.json,*.yml,*.yaml call CleanExtraSpaces()
+    autocmd!
+    " Markdown trailing spaces can encode intentional hard line breaks.
+    autocmd BufWritePre *.txt,*.js,*.css,*.html,*.py,*.sh,*.json,*.yml,*.yaml call CleanExtraSpaces()
 augroup END

@@ -5,17 +5,21 @@ set drawbox false
 set showbinds true
 set hidden false
 set info size:time
-set dircounts true
+set dircounts false
 
-set promptfmt "h updir  j/k move  l open  gg/G top/end  / search  <space> select  v invert  u unselect  y copy  d cut  c clear  p paste  . hidden  DEL trash  D delete %S %w"
+set promptfmt "h/l parent/open  j/k move  gg/G ends  /? search  n/N repeat  space/V select  y/d/p copy/cut/paste  r rename  . hidden  DEL trash  D delete  e edit  : cmd  q quit  F2 keys %S%w"
 
-set statfmt "\033[36m%p\033[0m| %c| %u| %g| -> %l"
-set rulerfmt " %i/%t | %P "
+cmd editselected ${{
+    set -f
+    IFS='
+'
+    vim -- $fx
+}}
 
 cmd open &{{
     case $(file --mime-type -Lb -- "$f") in
         text/*|application/json|application/xml|application/x-shellscript|inode/x-empty)
-            lf -remote "send $id \$vim \$fx"
+            lf -remote "send $id editselected"
             ;;
         image/*)
             swayimg "$f" >/dev/null 2>&1 &
@@ -24,26 +28,154 @@ cmd open &{{
             zathura "$f" >/dev/null 2>&1 &
             ;;
         *)
-            $OPENER "$f" >/dev/null 2>&1 &
+            "$OPENER" "$f" >/dev/null 2>&1 &
             ;;
     esac
 }}
 
 cmd trash ${{
-    mkdir -p ~/.trash
-    IFS="$(printf '\n\t')"
-    mv -- $fx ~/.trash/
+    mkdir -p "$HOME/.trash" || exit 1
+    # lf separates selections with newlines; preserve tabs and literal globs.
+    set -f
+    IFS='
+'
+
+    for src in $fx; do
+        base=${src##*/}
+        dst="$HOME/.trash/$base"
+
+        if [ -e "$dst" ] || [ -L "$dst" ]; then
+            n=1
+            while [ -e "$dst.$n" ] || [ -L "$dst.$n" ]; do
+                n=$((n + 1))
+            done
+            dst="$dst.$n"
+        fi
+
+        mv -nT -- "$src" "$dst"
+    done
 }}
 
 cmd delete ${{
-    IFS="$(printf '\n\t')"
+    set -f
+    IFS='
+'
     printf '%s\n' $fx
     printf 'delete permanently? [y/N] '
     read -r ans </dev/tty
     [ "$ans" = "y" ] && rm -rf -- $fx
 }}
 
+cmd keys ${{
+    printf '%s\n' \
+        'NAVIGATION' \
+        '  h / Left       parent directory' \
+        '  l / Right      open file or enter directory' \
+        '  j / Down       move down' \
+        '  k / Up         move up' \
+        '  gg / Home      first item' \
+        '  G / End        last item' \
+        '  H              high position on screen' \
+        '  M              middle position on screen' \
+        '  L              low position on screen' \
+        '  Ctrl-U         half page up' \
+        '  Ctrl-D         half page down' \
+        '  Ctrl-B / PgUp  page up' \
+        '  Ctrl-F / PgDn  page down' \
+        '  Ctrl-Y         scroll view up' \
+        '  Ctrl-E         scroll view down' \
+        '  [              previous jumplist location' \
+        '  ]              next jumplist location' \
+        '  gh             home directory' \
+        '' \
+        'SELECTION' \
+        '  Space          toggle selection and move down' \
+        '  v              invert selections in directory' \
+        '  u              clear all selections' \
+        '  V              enter Visual mode' \
+        '  V [visual]     accept Visual selection' \
+        '  Esc [visual]   discard Visual selection' \
+        '  o [visual]     switch active end of selection' \
+        '' \
+        'FILES' \
+        '  y              copy' \
+        '  d              cut / move' \
+        '  p              paste' \
+        '  c              clear copy/cut clipboard' \
+        '  r              rename' \
+        '  Delete         move to ~/.trash' \
+        '  D              permanently delete with prompt' \
+        '  t              toggle tag' \
+        '  e              open in $EDITOR' \
+        '  i              open in $PAGER' \
+        '' \
+        'SEARCH' \
+        '  /              search forward' \
+        '  ?              search backward' \
+        '  n              next search match' \
+        '  N              previous search match' \
+        '  f              find forward' \
+        '  F              find backward' \
+        '  ;              next find match' \
+        '  ,              previous find match' \
+        '' \
+        'DISPLAY' \
+        '  . / zh         toggle hidden files' \
+        '  zr             reverse sort order' \
+        '  zn             hide size/time info' \
+        '  zs             show size' \
+        '  zt             show modification time' \
+        '  za             show size and time' \
+        '' \
+        'SORTING' \
+        '  sn             natural filename sort' \
+        '  ss             size sort' \
+        '  st             modification-time sort' \
+        '  sa             access-time sort' \
+        '  sb             birth-time sort' \
+        '  sc             inode-change-time sort' \
+        '  se             extension sort' \
+        '' \
+        'MARKS' \
+        '  m{key}         save current directory as mark' \
+        "  '{key}         jump to mark" \
+        '  "{key}         remove mark' \
+        '' \
+        'COMMANDS / SHELL' \
+        '  :              lf command prompt' \
+        '  $              shell command' \
+        '  %              pipe shell command' \
+        '  !              shell command and wait' \
+        '  &              asynchronous shell command' \
+        '  w              interactive shell' \
+        '  Ctrl-R         reload directories' \
+        '  Ctrl-L         redraw screen' \
+        '  q              quit lf' \
+        '' \
+        'COMMAND-LINE EDITING' \
+        '  Enter          execute / accept' \
+        '  Esc            cancel' \
+        '  Tab            complete' \
+        '  Ctrl-N / Down  next history entry' \
+        '  Ctrl-P / Up    previous history entry' \
+        '  Ctrl-B / Left  move cursor left' \
+        '  Ctrl-F / Right move cursor right' \
+        '  Ctrl-A / Home  beginning of line' \
+        '  Ctrl-E / End   end of line' \
+        '  Ctrl-D         delete character' \
+        '  Backspace      delete previous character' \
+        '  Ctrl-U         delete to beginning' \
+        '  Ctrl-K         delete to end' \
+        '  Ctrl-W         delete previous word' \
+        '' \
+        'HELP' \
+        '  F1             full lf documentation' \
+        '  F2             this binding reference' \
+        | less -R
+}}
+
 map l open
 map <delete> trash
 map D delete
 map . set hidden!
+map <f-2> keys

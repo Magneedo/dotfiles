@@ -1,0 +1,83 @@
+#!/bin/sh
+set -eu
+
+PROFILE="${1:-}"
+
+case "$PROFILE" in
+  home|hotspot|school|eth) ;;
+  *) echo "Usage: net [home|hotspot|school|eth]"; exit 1 ;;
+esac
+
+WIFI_IFACE="${WIFI_IFACE:-wlan0}"
+ETH_IFACE="${ETH_IFACE:-eth0}"
+
+# These names are also written into the runit service's shell configuration.
+case "$WIFI_IFACE$ETH_IFACE" in
+  *[!a-zA-Z0-9_.:-]*) echo "Invalid network interface name" >&2; exit 2 ;;
+esac
+
+reset_dhcpcd() {
+  doas dhcpcd -x 2>/dev/null || true
+  sleep 1
+
+  if pgrep -x dhcpcd >/dev/null 2>&1; then
+    doas pkill -9 dhcpcd 2>/dev/null || true
+    sleep 1
+  fi
+
+  doas sv start dhcpcd 2>/dev/null || true
+}
+
+if [ "$PROFILE" = "eth" ]; then
+  doas ip link set "$ETH_IFACE" up
+
+  i=0
+  while [ "$i" -lt 8 ]; do
+    [ "$(cat "/sys/class/net/$ETH_IFACE/carrier" 2>/dev/null || echo 0)" = "1" ] && break
+    sleep 1
+    i=$((i + 1))
+  done
+
+  if [ "$(cat "/sys/class/net/$ETH_IFACE/carrier" 2>/dev/null || echo 0)" != "1" ]; then
+    echo "No cable/carrier on $ETH_IFACE"
+    exit 1
+  fi
+
+  reset_dhcpcd
+
+  i=0
+  while [ "$i" -lt 20 ]; do
+    ip -4 addr show "$ETH_IFACE" | grep -q 'inet ' && break
+    sleep 1
+    i=$((i + 1))
+  done
+
+  if ! ip -4 addr show "$ETH_IFACE" | grep -q 'inet '; then
+    echo "No IPv4 lease on $ETH_IFACE"
+    exit 1
+  fi
+
+  echo "Ethernet -> $ETH_IFACE"
+  exit 0
+fi
+
+CONF="/etc/wpa_supplicant/${PROFILE}.conf"
+[ -r "$CONF" ] || { echo "Missing $CONF"; exit 1; }
+
+# Switch away from Ethernet
+doas dhcpcd -k "$ETH_IFACE" 2>/dev/null || true
+doas ip addr flush dev "$ETH_IFACE" 2>/dev/null || true
+doas ip link set "$ETH_IFACE" down 2>/dev/null || true
+
+# Original Wi-Fi behavior
+doas ip link set "$WIFI_IFACE" up
+
+doas sh -c 'printf "CONF_FILE=%s\nWPA_INTERFACE=%s\nOPTS=-s\n" "$1" "$2" > /etc/runit/sv/wpa_supplicant/conf' sh "$CONF" "$WIFI_IFACE"
+
+doas dhcpcd -k "$WIFI_IFACE" || true
+doas sv restart wpa_supplicant
+sleep 2
+doas dhcpcd -n "$WIFI_IFACE"
+
+echo "Wi-Fi -> $PROFILE"
+exit 0

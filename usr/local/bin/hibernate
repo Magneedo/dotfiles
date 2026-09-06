@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+if [ "$(id -u)" -eq 0 ] || [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    printf '%s\n' 'Run hibernate as your desktop user from the Wayland session.' >&2
+    exit 1
+fi
+
+# -f returns only after swaylock has locked the session.
+swaylock -f
+# Avoid an authentication prompt hidden behind the lock screen.
+printf '%s\n' disk | doas -n /usr/bin/tee /sys/power/state >/dev/null

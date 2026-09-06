@@ -15,9 +15,6 @@ dbus-update-activation-environment \
 command -v brightnessctl >/dev/null 2>&1 &&
     brightnessctl set 1% >/dev/null 2>&1 || true
 
-command -v wlr-randr >/dev/null 2>&1 &&
-    "$HOME/.local/bin/display" >/dev/null 2>&1 &
-
 if ! pgrep -u "$uid" -x pipewire >/dev/null 2>&1; then
     pipewire >"$logdir/pipewire.log" 2>&1 &
 fi

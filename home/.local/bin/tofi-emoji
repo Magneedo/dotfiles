@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+selection=$(
+    flock -n -E 0 -o "${XDG_RUNTIME_DIR:?}/tofi-emoji.lock" \
+        tofi --config "${XDG_CONFIG_HOME:-$HOME/.config}/tofi/emoji" \
+            --require-match=true --auto-accept-single=false \
+        < "${XDG_DATA_HOME:-$HOME/.local/share}/tofi/characters.txt"
+)
+
+case "$selection" in
+    '') exit 0 ;;
+    *'	'*) character=${selection%%	*} ;;
+    *) exit 1 ;;
+esac
+
+printf '%s' "$character" | wl-copy --type 'text/plain;charset=utf-8'
+# Let the previous window regain focus before sending Unicode key events.
+exec wtype -s 100 -- "$character"

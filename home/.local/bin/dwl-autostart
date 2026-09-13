@@ -33,10 +33,6 @@ if ! pgrep -u "$uid" -x pipewire-pulse >/dev/null 2>&1; then
     pipewire-pulse >"$logdir/pipewire-pulse.log" 2>&1 &
 fi
 
-wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.50 >/dev/null 2>&1 || true
-wpctl set-mute @DEFAULT_AUDIO_SINK@ 0 >/dev/null 2>&1 || true
-
-# Linux process names are limited to 15 bytes; match portal command lines.
 if ! pgrep -u "$uid" -f '^(/usr/lib/)?xdg-desktop-portal-wlr([[:space:]]|$)' >/dev/null 2>&1; then
     /usr/lib/xdg-desktop-portal-wlr \
         >"$logdir/xdg-desktop-portal-wlr.log" 2>&1 &

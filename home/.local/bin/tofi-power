@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+action=$(
+    printf '%s\n' lock hibernate reboot poweroff |
+        flock -n -E 0 -o "${XDG_RUNTIME_DIR:?}/tofi-power.lock" \
+            tofi --history=false \
+                --require-match=true --auto-accept-single=false
+)
+
+case "$action" in
+    lock|hibernate|reboot|poweroff) exec "/usr/local/bin/$action" ;;
+    '') exit 0 ;;
+    *) exit 1 ;;
+esac

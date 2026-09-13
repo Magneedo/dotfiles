@@ -575,13 +575,13 @@ which
 wireless-regdb
 wireplumber
 wl-clipboard
-wlogout
 wlr-randr
 wlroots0.18
 woff2
 wolfssl
 wpa_supplicant
 wpa_supplicant-runit
+wtype
 x264
 x265
 xcb-proto

@@ -101,11 +101,11 @@ which
 wireless-regdb
 wireplumber
 wl-clipboard
-wlogout
 wlr-randr
 wlroots0.18
 wpa_supplicant
 wpa_supplicant-runit
+wtype
 xdg-desktop-portal
 xdg-desktop-portal-gtk
 xdg-desktop-portal-wlr

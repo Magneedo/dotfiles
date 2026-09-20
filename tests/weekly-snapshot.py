@@ -282,8 +282,9 @@ class Cron(unittest.TestCase):
                               'printf "scheduled-job-output\\n"\n'
                               'touch /run/scheduled\n')
             helper.chmod(0o755)
-            command = ['bwrap', '--unshare-user', '--uid', '0', '--gid', '0',
-                       '--unshare-pid', '--die-with-parent', '--new-session',
+            # A user namespace disables setgroups even when the caller is root.
+            command = ['bwrap', '--unshare-pid', '--die-with-parent', '--new-session',
+                       '--cap-add', 'CAP_SETUID', '--cap-add', 'CAP_SETGID',
                        '--ro-bind', '/', '/', '--dev', '/dev', '--proc', '/proc']
             for path in ('etc', 'usr/local', 'run', 'root'):
                 command += ['--bind', str(root / path), '/' + path]

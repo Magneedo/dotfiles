@@ -1,0 +1,3 @@
+SHELL=/bin/sh
+MAILTO=
+15 * * * * /usr/local/sbin/weekly-snapshot

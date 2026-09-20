@@ -10,3 +10,4 @@ fi
 swaylock -f
 # Avoid an authentication prompt hidden behind the lock screen.
 printf '%s\n' disk | doas -n /usr/bin/tee /sys/power/state >/dev/null
+doas -n /usr/local/sbin/power-profile resume

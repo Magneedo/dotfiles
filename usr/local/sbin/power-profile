@@ -1,0 +1,99 @@
+#!/bin/sh
+set -eu
+
+PATH=/usr/bin:/bin
+export PATH
+
+fail() {
+    printf 'power-profile: %s\n' "$*" >&2
+    exit 1
+}
+
+get_profile() {
+    IFS= read -r observed_turbo < "$cpu/intel_pstate/no_turbo"
+    current=
+    for policy in "$cpu"/cpufreq/policy*; do
+        IFS= read -r governor < "$policy/scaling_governor"
+        IFS= read -r preference < "$policy/energy_performance_preference"
+        case "$governor:$preference:$observed_turbo" in
+            powersave:power:1) observed=battery-saver ;;
+            powersave:balance_performance:0) observed=normal ;;
+            powersave:performance:0) observed=performance ;;
+            *) observed=custom ;;
+        esac
+        if [ -z "$current" ]; then
+            current=$observed
+        elif [ "$current" != "$observed" ]; then
+            current=custom
+        fi
+    done
+}
+
+[ "$#" -eq 1 ] || fail 'usage: power-profile {battery-saver|normal|performance|status|resume}'
+action=$1
+case "$action" in
+    battery-saver|normal|performance|status|resume) ;;
+    *) fail "unknown profile: $action" ;;
+esac
+
+cpu=/sys/devices/system/cpu
+state_dir=/run/power-profile
+[ -r "$cpu/intel_pstate/status" ] || fail 'intel_pstate is unavailable'
+IFS= read -r driver_status < "$cpu/intel_pstate/status"
+[ "$driver_status" = active ] || fail 'intel_pstate must be active'
+set -- "$cpu"/cpufreq/policy*
+[ -d "$1" ] || fail 'no CPU policies found'
+
+if [ "$action" = status ]; then
+    get_profile
+    printf '%s\n' "$current"
+    exit 0
+fi
+
+[ "$(id -u)" -eq 0 ] || fail 'changing profiles requires root'
+umask 022
+mkdir -p "$state_dir"
+exec 9>"$state_dir/lock"
+flock -x 9
+
+profile=$action
+if [ "$profile" = resume ]; then
+    profile=normal
+    if [ -f "$state_dir/profile" ]; then
+        IFS= read -r profile < "$state_dir/profile"
+    fi
+fi
+
+case "$profile" in
+    battery-saver) target_preference=power; turbo=1 ;;
+    normal) target_preference=balance_performance; turbo=0 ;;
+    performance) target_preference=performance; turbo=0 ;;
+    *) fail "invalid saved profile: $profile" ;;
+esac
+
+[ -w "$cpu/intel_pstate/no_turbo" ] || fail 'turbo control is not writable'
+for policy in "$cpu"/cpufreq/policy*; do
+    IFS= read -r driver < "$policy/scaling_driver"
+    [ "$driver" = intel_pstate ] || fail "unexpected driver for $policy"
+    IFS= read -r available < "$policy/energy_performance_available_preferences"
+    case " $available " in
+        *" $target_preference "*) ;;
+        *) fail "$policy does not support $target_preference" ;;
+    esac
+    [ -w "$policy/scaling_governor" ] &&
+        [ -w "$policy/energy_performance_preference" ] ||
+        fail "$policy is not writable"
+done
+
+printf '%s\n' "$turbo" > "$cpu/intel_pstate/no_turbo"
+for policy in "$cpu"/cpufreq/policy*; do
+    # The adaptive governor permits EPP changes, including performance EPP.
+    printf '%s\n' powersave > "$policy/scaling_governor"
+    printf '%s\n' "$target_preference" > "$policy/energy_performance_preference"
+done
+
+get_profile
+[ "$current" = "$profile" ] || fail 'settings did not take effect'
+trap 'rm -f "$state_dir/profile.tmp"' 0
+printf '%s\n' "$profile" > "$state_dir/profile.tmp"
+mv -f "$state_dir/profile.tmp" "$state_dir/profile"

@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+exec 2>&1
+
+if ! /usr/local/sbin/weekly-snapshot; then
+    printf '%s\n' 'cron: startup snapshot failed; the hourly job will retry.' >&2
+fi
+exec /usr/bin/busybox crond -f -d 8 -c /etc/cron/crontabs

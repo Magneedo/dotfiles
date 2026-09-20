@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+PATH=/usr/bin:/bin
+export PATH
+cd -- "$(dirname -- "$0")/.."
+
+install_root=${1:-/}
+case "$install_root" in
+    /*) ;;
+    *) printf '%s\n' 'The installation root must be an absolute path.' >&2; exit 1 ;;
+esac
+install_root=${install_root%/}
+if [ -z "$install_root" ] && [ "$(id -u)" -ne 0 ]; then
+    printf '%s\n' 'Run doas ./scripts/install-power-profile from the dotfiles repository.' >&2
+    exit 1
+fi
+
+policy=$install_root/etc/doas.conf
+if [ ! -f "$policy" ] || [ -L "$policy" ]; then
+    printf '%s\n' 'An existing regular /etc/doas.conf is required.' >&2
+    exit 1
+fi
+candidate=$(mktemp "$install_root/etc/.doas-power-profile.XXXXXX")
+trap 'rm -f "$candidate"' 0
+cp "$policy" "$candidate"
+while IFS= read -r rule; do
+    case "$rule" in
+        'permit nopass bren as root cmd /usr/local/sbin/power-profile args '*)
+            if ! grep -Fxq "$rule" "$candidate"; then
+                printf '\n%s\n' "$rule" >> "$candidate"
+            fi
+            ;;
+    esac
+done < etc/doas.conf
+doas -C "$candidate"
+chmod 0600 "$candidate"
+
+for path in usr/local/sbin/power-profile usr/local/bin/hibernate \
+        etc/local.d/power-profile.start \
+        etc/elogind/system-sleep/power-profile; do
+    install -Dm0755 "$path" "$install_root/$path"
+done
+
+if ! cmp -s "$candidate" "$policy"; then
+    if [ ! -e "$policy.before-power-profile" ]; then
+        cp -p "$policy" "$policy.before-power-profile"
+    fi
+    mv -f "$candidate" "$policy"
+fi
+printf '%s\n' 'Installed power profiles, startup/resume hooks and scoped doas rules.'
+printf '%s\n' 'Normal will be selected at the next boot. The running profile was not changed.'

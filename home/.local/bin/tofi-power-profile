@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+current=$(/usr/local/sbin/power-profile status)
+selection=$(
+    printf '%s\n' 'battery-saver' normal performance |
+        flock -n -E 0 -o "${XDG_RUNTIME_DIR:?}/tofi-power-profile.lock" \
+            tofi --history=false --prompt-text "profile ($current): " \
+                --require-match=true --auto-accept-single=false
+)
+
+case "$selection" in
+    battery-saver) profile=battery-saver ;;
+    normal) profile=normal ;;
+    performance) profile=performance ;;
+    '') exit 0 ;;
+    *) exit 1 ;;
+esac
+
+exec doas -n /usr/local/sbin/power-profile "$profile"

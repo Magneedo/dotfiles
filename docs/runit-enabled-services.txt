@@ -2,6 +2,7 @@ agetty-tty1
 agetty-tty2
 bluetoothd
 chrony
+cron
 dbus
 dhcpcd
 mullvad

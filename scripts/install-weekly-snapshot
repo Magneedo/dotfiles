@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+PATH=/usr/bin:/bin
+export PATH
+cd -- "$(dirname -- "$0")/.."
+
+[ "$#" -le 1 ] || { printf '%s\n' 'usage: install-weekly-snapshot [ROOT]' >&2; exit 1; }
+install_root=${1:-/}
+case "$install_root" in
+    /*) ;;
+    *) printf '%s\n' 'The installation root must be an absolute path.' >&2; exit 1 ;;
+esac
+install_root=${install_root%/}
+if [ -z "$install_root" ] && [ "$(id -u)" -ne 0 ]; then
+    printf '%s\n' 'Run doas ./scripts/install-weekly-snapshot from the dotfiles repository.' >&2
+    exit 1
+fi
+
+for path in etc/cron/crontabs/root etc/runit/sv/cron/run etc/runit/sv/cron/log/run; do
+    if [ -e "$install_root/$path" ] || [ -L "$install_root/$path" ]; then
+        if [ -L "$install_root/$path" ] || ! cmp -s "$path" "$install_root/$path"; then
+            printf 'Refusing to replace existing configuration: %s\n' "$install_root/$path" >&2
+            exit 1
+        fi
+    fi
+done
+service=$install_root/etc/runit/runsvdir/default/cron
+if [ -e "$service" ] || [ -L "$service" ]; then
+    [ "$(readlink "$service")" = /etc/runit/sv/cron ] || {
+        printf 'Unexpected service link: %s\n' "$service" >&2
+        exit 1
+    }
+fi
+
+if [ -z "$install_root" ]; then
+    python3 -B tests/weekly-snapshot.py Cron
+fi
+for path in usr/local/sbin/weekly-snapshot etc/runit/sv/cron/run etc/runit/sv/cron/log/run; do
+    install -Dm0755 "$path" "$install_root/$path"
+done
+install -dm0700 "$install_root/etc/cron/crontabs"
+install -m0600 etc/cron/crontabs/root "$install_root/etc/cron/crontabs/root"
+install -dm0750 "$install_root/var/log/cron"
+install -dm0755 "$install_root/etc/runit/runsvdir/default"
+if [ -z "$install_root" ]; then
+    /usr/local/sbin/weekly-snapshot
+fi
+if [ ! -L "$service" ]; then
+    ln -s /etc/runit/sv/cron "$service"
+fi
+printf '%s\n' 'Installed weekly snapshots and enabled BusyBox cron under runit.'

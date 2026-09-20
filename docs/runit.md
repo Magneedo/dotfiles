@@ -3,7 +3,11 @@
 The system uses the normal/default runlevel. Canonical service definitions
 are under `/etc/runit/sv`, enabled service links are under
 `/etc/runit/runsvdir/default`, and `/etc/runit/runsvdir/current -> default`.
-`runit-enabled-services.txt` lists the eleven enabled services.
+`runit-enabled-services.txt` lists the enabled services.
+
+The local `cron` service runs the installed BusyBox `crond`, with its root
+crontab under `/etc/cron/crontabs` and rotated logs under `/var/log/cron`.
+See [storage maintenance](storage-maintenance.md) for the weekly snapshot job.
 
 Intentional customizations are stored directly under `etc/runit/sv` in this
 repository. They preserve tty1 autologin for `bren`, foreground dhcpcd with

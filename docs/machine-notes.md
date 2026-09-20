@@ -15,6 +15,10 @@
 - Run `tofi-power`, or use `Mod+Escape` after rebuilding and installing dwl
   with the new binding. Type to filter, press Enter to run the selected action,
   or Escape to cancel. The menu lock is released before an action starts.
+- `Mod+Shift+Escape` opens `~/.local/bin/tofi-power-profile` with `battery-saver`,
+  `normal` and `performance`. Normal is selected at boot; manual choices survive
+  suspend and hibernation. See [power profiles](power-profiles.md) for installation
+  and tests.
 
 ## Emoji and character picker
 - `Mod+period` opens `tofi-emoji` in a centered popup. Type a name such as
@@ -68,10 +72,11 @@ license is tracked as `home/.local/share/tofi/LICENSE.unicode`.
   before requesting hibernation through `/sys/power/state`. Physical testing
   confirmed locking, hibernation, resume and successful return to the dwl session.
 - Btrfs uses the default 30-second commit interval; monthly scrub on AC is the
-  maintenance cadence. See `storage-maintenance.md`.
+  maintenance cadence. BusyBox cron retains four weekly snapshots including
+  home and matching boot files. See `storage-maintenance.md`.
 
 ## Core services enabled
-- See `runit-enabled-services.txt` for the eleven enabled services.
+- See `runit-enabled-services.txt` for the enabled services.
 - Service definitions live in `/etc/runit/sv`; the enabled links are under
   `/etc/runit/runsvdir/default`, and `/etc/runit/runsvdir/current` points to
   `default`. See `runit.md` for the intentional service customizations.

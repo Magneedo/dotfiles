@@ -1,0 +1,110 @@
+#!/bin/sh
+set -eu
+
+PATH=/usr/bin:/bin
+LC_ALL=C
+export PATH LC_ALL
+umask 077
+
+fail() {
+    printf 'weekly-snapshot: %s\n' "$*" >&2
+    exit 1
+}
+
+prune() {
+    latest=
+    set -- "$destination"/20??-??-??T??:??:??Z
+    [ -e "$1" ] || return 0
+    for snapshot do
+        [ ! -L "$snapshot" ] || fail "unexpected symlink: $snapshot"
+        [ "$(btrfs property get -ts "$snapshot" ro)" = ro=true ] ||
+            fail "expected a read-only snapshot: $snapshot"
+        date -u -d "${snapshot##*/}" +%s >/dev/null
+        latest=$snapshot
+    done
+    while [ "$#" -gt 4 ]; do
+        btrfs subvolume delete -c "$1"
+        shift
+    done
+}
+
+cleanup() {
+    result=$?
+    trap - 0
+    if [ "$database_locked" = yes ]; then
+        rm -f "$database_lock" || result=1
+    fi
+    if [ -n "$pending" ] && [ -e "$pending" ]; then
+        btrfs subvolume delete -c "$pending" || result=1
+    fi
+    exit "$result"
+}
+
+[ "$#" -eq 0 ] || fail 'this command takes no arguments'
+[ "$(id -u)" -eq 0 ] || fail 'run as root'
+[ "$(findmnt -nro FSTYPE -M /)" = btrfs ] || fail '/ must be Btrfs'
+[ "$(findmnt -nro FSROOT -M /.snapshots)" = /@snapshots ] ||
+    fail '/.snapshots must mount @snapshots'
+[ "$(findmnt -nro UUID -M /)" = "$(findmnt -nro UUID -M /.snapshots)" ] ||
+    fail '/ and /.snapshots must share a filesystem'
+[ "$(btrfs inspect-internal rootid /)" = "$(btrfs inspect-internal rootid /home/bren)" ] ||
+    fail '/home/bren must belong to the root subvolume'
+mountpoint -q /boot || fail '/boot is not mounted'
+for name in vmlinuz-linux intel-ucode.img booster-linux.img; do
+    [ -s "/boot/$name" ] || fail "missing /boot/$name"
+done
+
+exec 9>/run/weekly-snapshot.lock
+if flock -n 9; then
+    :
+else
+    result=$?
+    [ "$result" -eq 1 ] && exit 0
+    exit "$result"
+fi
+
+destination=/.snapshots/weekly
+[ ! -L "$destination" ] || fail "$destination must not be a symlink"
+install -dm0700 "$destination"
+pending=
+database_lock=/var/lib/pacman/db.lck
+database_locked=no
+trap cleanup 0
+trap 'exit 1' HUP INT TERM
+
+# Only this job owns .pending; recover an interrupted creation before retrying.
+unfinished=$destination/.pending
+if [ -e "$unfinished" ] || [ -L "$unfinished" ]; then
+    [ ! -L "$unfinished" ] || fail "unexpected symlink: $unfinished"
+    btrfs subvolume delete -c "$unfinished"
+fi
+prune
+now=$(date -u +%s)
+if [ -n "$latest" ]; then
+    previous=$(date -u -d "${latest##*/}" +%s)
+    [ "$((now - previous))" -ge 604800 ] || exit 0
+fi
+available=$(df -Pk / | awk 'NR == 2 { print $4 }')
+[ "$available" -ge 20971520 ] || fail 'less than 20 GiB free; snapshot deferred'
+
+# Use pacman's native exclusive lock while capturing root and its boot files.
+if (set -C; printf '%s\n' "$$" > "$database_lock") 2>/dev/null; then
+    database_locked=yes
+else
+    fail 'cannot lock the package database; retry after the package transaction'
+fi
+pending=$unfinished
+btrfs subvolume snapshot / "$pending"
+rm "$pending/var/lib/pacman/db.lck"
+[ -d "$pending/boot" ] && [ ! -L "$pending/boot" ] || fail 'invalid snapshot boot directory'
+cp -a /boot/. "$pending/boot/"
+btrfs property set -ts "$pending" ro true
+snapshot=$destination/$(date -u +%Y-%m-%dT%H:%M:%SZ)
+[ ! -e "$snapshot" ] || fail "snapshot already exists: $snapshot"
+mv -T "$pending" "$snapshot"
+pending=
+sync -f "$destination"
+rm "$database_lock"
+database_locked=no
+printf 'weekly-snapshot: created %s (includes /home/bren and /boot)\n' "$snapshot"
+prune

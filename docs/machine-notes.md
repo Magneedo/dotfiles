@@ -21,12 +21,17 @@
   and tests.
 
 ## Emoji and character picker
-- `Mod+period` opens `tofi-emoji` in a centered popup. Type a name such as
+- ``Mod+` `` (grave) opens `tofi-emoji` in a centered popup. Type a name such as
   `grinning`, `technologist`, `arrow`, `integral`, or `greek`, then use the arrow
   keys and Enter to insert the selection into the previously focused app.
   The character is also copied to the clipboard for reuse. Escape cancels
   without typing or changing the clipboard. Selection inserts only the character
   or complete emoji sequence, with no description or trailing newline.
+- Search matches whole typed words, not scattered letters, so `delta` lists
+  every delta (Greek, Latin, modifier and math bold/italic forms) instead of
+  hundreds of unrelated rows. Several words narrow the list in any order. CLDR
+  keywords follow each name after `·`, so `smile`, `happy`, `lol` or `root`
+  find the expected emoji and symbols.
 - Install `home/.local/bin/tofi-emoji` to `~/.local/bin` with mode `0755`,
   `home/.config/tofi/emoji` to `~/.config/tofi/emoji`, and
   `home/.local/share/tofi/` to `~/.local/share/tofi/`. It uses the existing
@@ -34,11 +39,11 @@
   Unicode key events after the menu closes, so it also works in terminals
   without needing a different paste shortcut. Repeated presses cannot
   open duplicate menus. Run `tofi-emoji` directly before restarting dwl to use
-  the new binding. Monitor focus moves to `Mod+Ctrl+comma/period`; the shifted
-  bindings for moving windows between monitors remain available.
-- The offline catalogue contains 15,309 supported emoji, punctuation, symbols,
-  numbers, Latin, Greek and Cyrillic characters. It includes skin tones and
-  joined emoji sequences. Names come from Unicode 17.0, and no network access
+  the new binding.
+- The offline catalogue contains 16,556 supported emoji, punctuation, symbols,
+  numbers, Latin, Greek and Cyrillic characters, plus styled forms of those
+  letters such as 𝛅, ᵟ, ℝ and ｍ. It includes skin tones and joined emoji
+  sequences. Names come from Unicode 17.0 and keywords from CLDR 48, and no network access
   is needed to open the picker. History is disabled.
 - Both tofi configurations use font family names so Pango can find fallback
   fonts. Generic fontconfig aliases prefer Noto Sans, Serif and Sans Mono,
@@ -51,10 +56,11 @@
   catalogue; applications with their own fonts or rendering can still show
   missing characters after pasting.
 
-To regenerate, download the pinned [emoji-test.txt](https://www.unicode.org/Public/17.0.0/emoji/emoji-test.txt)
-and [UnicodeData.txt](https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt)
+To regenerate, download the pinned [emoji-test.txt](https://www.unicode.org/Public/17.0.0/emoji/emoji-test.txt),
+[UnicodeData.txt](https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt)
+and [en.xml](https://raw.githubusercontent.com/unicode-org/cldr/release-48-2/common/annotations/en.xml)
 into one directory, then run `python3 scripts/update-characters.py DIRECTORY`.
-The script validates both SHA-256 checksums before writing the catalogue and
+The script validates all three SHA-256 checksums before writing the catalogue and
 uses the existing Pango libraries. Review the resulting diff and copy the new
 catalogue into `~/.local/share/tofi/characters.txt`. The associated Unicode
 license is tracked as `home/.local/share/tofi/LICENSE.unicode`.

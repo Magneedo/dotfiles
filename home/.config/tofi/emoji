@@ -22,4 +22,4 @@ result-spacing = 10
 num-results = 9
 text-cursor = true
 history = false
-fuzzy-match = true
+fuzzy-match = false

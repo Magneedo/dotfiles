@@ -1,3 +1,4 @@
 SHELL=/bin/sh
 MAILTO=
 15 * * * * /usr/local/sbin/weekly-snapshot
+45 * * * * /usr/bin/paccache -rqk2 && /usr/bin/paccache -rquk0

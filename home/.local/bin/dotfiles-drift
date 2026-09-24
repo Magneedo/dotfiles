@@ -18,8 +18,8 @@ while IFS= read -r f; do
     else
         # It's missing only if the nearest path that exists is a folder we can search.
         d=$live
-        while [ -n "$d" ] && [ ! -e "$d" ]; do d=${d%/*}; done
-        if [ "$d" = "$live" ] || [ ! -x "$d" ]; then
+        while [ ! -e "${d:-/}" ]; do d=${d%/*}; done
+        if [ "$d" = "$live" ] || [ ! -x "${d:-/}" ]; then
             echo "unreadable $live"
             continue
         fi

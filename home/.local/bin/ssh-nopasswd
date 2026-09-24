@@ -1,0 +1,71 @@
+#!/bin/sh
+# Enable passwordless sudo for the SSH login. Requires existing sudo access.
+set -eu
+
+if [ "$#" -gt 1 ]; then
+    echo "Usage: ssh-nopasswd [user@host]" >&2
+    exit 1
+fi
+host=${1:-brendynmarroquin.xyz}
+case $host in ''|-*) echo "Invalid SSH destination" >&2; exit 1 ;; esac
+user=$(ssh "$host" id -un)
+case $user in
+    ''|[-0-9]*|*[!a-zA-Z0-9_-]*) echo "Unsupported login name: $user" >&2; exit 1 ;;
+    root) echo "Root already has full access; use a non-root SSH login." >&2; exit 1 ;;
+esac
+
+rule=$(mktemp)
+remote=
+cleanup() {
+    rm -f "$rule"
+    if [ -n "$remote" ]; then
+        ssh -o BatchMode=yes "$host" "rm -f '$remote'" || :
+    fi
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+printf '%s ALL=(ALL:ALL) NOPASSWD: ALL\n' "$user" > "$rule"
+remote=$(ssh "$host" 'mktemp /tmp/ssh-nopasswd.XXXXXXXXXX')
+case $remote in
+    /tmp/ssh-nopasswd.*) suffix=${remote#/tmp/ssh-nopasswd.} ;;
+    *) remote=; echo "Unexpected remote temporary path" >&2; exit 1 ;;
+esac
+case $suffix in
+    ''|*[!a-zA-Z0-9]*) remote=; echo "Invalid remote temporary path" >&2; exit 1 ;;
+esac
+scp "$rule" "$host:$remote"
+
+# Pass the script as an argument, leaving the terminal free for sudo's prompt.
+installer='
+set -eu
+src=$1
+user=$2
+dest=/etc/sudoers.d/zz-nopasswd-$user
+test -d /etc/sudoers.d
+if [ -e "$dest" ] || [ -L "$dest" ]; then
+    echo "Refusing to overwrite $dest" >&2
+    exit 1
+fi
+visudo -c
+stage=$(mktemp /etc/sudoers.d/.nopasswd.XXXXXXXXXX)
+installed=
+cleanup() {
+    rm -f "$stage" "$src"
+    if [ -n "$installed" ]; then rm -f "$dest"; fi
+}
+trap cleanup EXIT
+trap "exit 1" HUP INT TERM
+install -o root -g root -m 0440 "$src" "$stage"
+visudo -cf "$stage"
+installed=yes
+mv "$stage" "$dest"
+visudo -c
+if ! su -s /bin/sh -c "sudo -k -n true" "$user"; then
+    echo "Rule not in effect; check sudoers includedir and rule ordering." >&2
+    exit 1
+fi
+installed=
+printf "Passwordless sudo enabled for %s; undo with: sudo rm %s\n" "$user" "$dest"
+'
+ssh -t "$host" "sudo sh -c '$installer' sh '$remote' '$user'"
+remote=

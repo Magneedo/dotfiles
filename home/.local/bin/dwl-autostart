@@ -44,6 +44,7 @@ if ! pgrep -u "$uid" -f '^(/usr/lib/)?xdg-desktop-portal([[:space:]]|$)' >/dev/n
 fi
 
 foot --server >/dev/null 2>&1 &
+"$HOME/.local/bin/codexclaude" start >/dev/null 2>&1 &
 "$HOME/.local/bin/wallpaper" >/dev/null 2>&1 &
 
 (

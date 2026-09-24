@@ -11,3 +11,6 @@ UUID=804A-F33C      	/boot     	vfat      	rw,relatime,fmask=0022,dmask=0022,cod
 UUID=9690a06b-8520-437a-ac0e-bd9753fa5f3a none swap defaults,discard=once,pri=100 0 0
 
 
+# Codex memories, shown in the Vault. A symlink won't do: Obsidian ignores
+# links within a vault, and Codex rejects a linked memory folder.
+/home/bren/Vault/Agents/.codex/memories	/home/bren/Vault/Agents/Memory/Codex	none	bind,nofail	0 0

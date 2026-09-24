@@ -5,6 +5,9 @@ export XDG_CURRENT_DESKTOP=dwl
 export XDG_SESSION_DESKTOP=dwl
 export XDG_SESSION_TYPE=wayland
 
+export CLAUDE_CONFIG_DIR="$HOME/Vault/Agents/.claude"
+export CODEX_HOME="$HOME/Vault/Agents/.codex"
+
 uid="$(id -u)"
 runtime="/run/user/$uid"
 

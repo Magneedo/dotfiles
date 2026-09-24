@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+
+# Codex and Claude run in their own tmux server, started by dwl-autostart.
+# Mod+c opens the popup or closes it if it is already open, Alt+Tab swaps
+# between the agents, and closing the popup never stops either one.
+tmux="tmux -L codexclaude"
+
+# Start an agent unless it is already running (it may have exited).
+run() {
+    $tmux list-windows -t codexclaude -F '#W' 2>/dev/null | grep -qx "$1" && return
+    if $tmux has-session -t codexclaude 2>/dev/null; then
+        $tmux new-window -d -t codexclaude -n "$1" -c "$HOME/Vault/Agents" "$@"
+    else
+        # Without mouse mode, foot turns the wheel into arrow keys: prompt
+        # history. No prefix key, so Ctrl+B still reaches Claude. The popup's
+        # title, shown in the bar, names the agent on screen.
+        $tmux set -g status off \; set -g mouse on \; \
+            set -g history-limit 50000 \; set -g prefix None \; \
+            set -g set-titles on \; set -g set-titles-string '#W' \; \
+            bind -n M-Tab next-window \; \
+            new-session -d -s codexclaude -n "$1" -c "$HOME/Vault/Agents" "$@"
+    fi
+}
+
+if [ -z "${1-}" ] && [ -n "$($tmux list-clients 2>/dev/null)" ]; then
+    exec $tmux detach-client -s codexclaude
+fi
+
+run codex --no-alt-screen
+run claude
+
+[ "${1-}" = start ] || exec footclient --app-id=codexclaude $tmux attach -t codexclaude

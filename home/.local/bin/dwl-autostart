@@ -46,6 +46,8 @@ fi
 foot --server >/dev/null 2>&1 &
 "$HOME/.local/bin/codexclaude" start >/dev/null 2>&1 &
 "$HOME/.local/bin/wallpaper" >/dev/null 2>&1 &
+# Lock after 10 idle minutes and before elogind suspends (lid close).
+swayidle -w timeout 600 'swaylock -f' before-sleep 'swaylock -f' >/dev/null 2>&1 &
 
 (
     while ! pgrep -u "$uid" -x dwlb >/dev/null 2>&1; do
@@ -54,6 +56,9 @@ foot --server >/dev/null 2>&1 &
 
     "$HOME/.local/bin/statusd" |
         while IFS= read -r status; do
+            # Each call redraws every bar, so skip unchanged lines.
+            [ "$status" = "${last-}" ] && continue
+            last=$status
             dwlb -status all "$status"
         done
 ) >"$logdir/dwlb-status.log" 2>&1 &

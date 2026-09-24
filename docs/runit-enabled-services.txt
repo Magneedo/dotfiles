@@ -5,8 +5,7 @@ chrony
 cron
 dbus
 dhcpcd
-mullvad
+nftables
 seatd
-sshd
 udevd
 wpa_supplicant

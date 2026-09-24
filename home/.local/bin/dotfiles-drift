@@ -4,23 +4,29 @@
 set -eu
 
 cd "$HOME/Projects/dotfiles"
-git ls-files -- home etc usr | {
-    rc=0
-    while IFS= read -r f; do
-        case $f in
-            home/*) live=$HOME/${f#home/} ;;
-            *) live=/$f ;;
-        esac
-        if [ -r "$live" ]; then
-            cmp -s "$f" "$live" && continue
-            echo "differs    $live"
-        elif [ -e "$live" ] || [ ! -x "${live%/*}" ]; then
+files=$(git ls-files -- home etc usr)
+rc=0
+while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    case $f in
+        home/*) live=$HOME/${f#home/} ;;
+        *) live=/$f ;;
+    esac
+    if [ -r "$live" ]; then
+        cmp -s "$f" "$live" && continue
+        echo "differs    $live"
+    else
+        # It's missing only if the nearest path that exists is a folder we can search.
+        d=$live
+        while [ -n "$d" ] && [ ! -e "$d" ]; do d=${d%/*}; done
+        if [ "$d" = "$live" ] || [ ! -x "$d" ]; then
             echo "unreadable $live"
             continue
-        else
-            echo "missing    $live"
         fi
-        rc=1
-    done
-    exit "$rc"
-}
+        echo "missing    $live"
+    fi
+    rc=1
+done <<EOT
+$files
+EOT
+exit "$rc"

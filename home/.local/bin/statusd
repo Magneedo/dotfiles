@@ -139,15 +139,6 @@ default_iface() {
         }'
 }
 
-wifi_ssid() {
-    iface="$1"
-
-    command -v iw >/dev/null 2>&1 || return 1
-
-    iw dev "$iface" link 2>/dev/null |
-        sed -n 's/^[[:space:]]*SSID: //p'
-}
-
 net_str() {
     if airplane_mode; then
         printf '✈'
@@ -166,13 +157,7 @@ net_str() {
             printf 'eth'
             ;;
         wl*|wlan*)
-            ssid="$(wifi_ssid "$iface")" || ssid=""
-
-            if [ -n "$ssid" ]; then
-                printf '%s' "$ssid"
-            else
-                printf 'wifi'
-            fi
+            printf 'wifi'
             ;;
         *)
             printf '%s' "$iface"

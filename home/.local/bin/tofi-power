@@ -4,7 +4,7 @@ set -eu
 action=$(
     printf '%s\n' lock hibernate reboot poweroff |
         flock -n -E 0 -o "${XDG_RUNTIME_DIR:?}/tofi-power.lock" \
-            tofi --history=false \
+            tofi --history=false --prompt-text "power: " \
                 --require-match=true --auto-accept-single=false
 )
 

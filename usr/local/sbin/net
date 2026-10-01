@@ -8,6 +8,8 @@ case "$PROFILE" in
   *) echo "Usage: net [home|hotspot|school|eth]"; exit 1 ;;
 esac
 
+[ "$(id -u)" -eq 0 ] || exec doas /usr/local/sbin/net "$PROFILE"
+
 WIFI_IFACE="${WIFI_IFACE:-wlan0}"
 ETH_IFACE="${ETH_IFACE:-eth0}"
 
@@ -17,19 +19,19 @@ case "$WIFI_IFACE$ETH_IFACE" in
 esac
 
 reset_dhcpcd() {
-  doas dhcpcd -x 2>/dev/null || true
+  dhcpcd -x 2>/dev/null || true
   sleep 1
 
   if pgrep -x dhcpcd >/dev/null 2>&1; then
-    doas pkill -9 dhcpcd 2>/dev/null || true
+    pkill -9 dhcpcd 2>/dev/null || true
     sleep 1
   fi
 
-  doas sv start dhcpcd 2>/dev/null || true
+  sv start dhcpcd 2>/dev/null || true
 }
 
 if [ "$PROFILE" = "eth" ]; then
-  doas ip link set "$ETH_IFACE" up
+  ip link set "$ETH_IFACE" up
 
   i=0
   while [ "$i" -lt 8 ]; do
@@ -65,19 +67,19 @@ CONF="/etc/wpa_supplicant/${PROFILE}.conf"
 [ -f "$CONF" ] || { echo "Missing $CONF"; exit 1; }
 
 # Switch away from Ethernet
-doas dhcpcd -k "$ETH_IFACE" 2>/dev/null || true
-doas ip addr flush dev "$ETH_IFACE" 2>/dev/null || true
-doas ip link set "$ETH_IFACE" down 2>/dev/null || true
+dhcpcd -k "$ETH_IFACE" 2>/dev/null || true
+ip addr flush dev "$ETH_IFACE" 2>/dev/null || true
+ip link set "$ETH_IFACE" down 2>/dev/null || true
 
 # Original Wi-Fi behavior
-doas ip link set "$WIFI_IFACE" up
+ip link set "$WIFI_IFACE" up
 
-doas sh -c 'printf "CONF_FILE=%s\nWPA_INTERFACE=%s\nOPTS=-s\n" "$1" "$2" > /etc/runit/sv/wpa_supplicant/conf' sh "$CONF" "$WIFI_IFACE"
+printf "CONF_FILE=%s\nWPA_INTERFACE=%s\nOPTS=-s\n" "$CONF" "$WIFI_IFACE" > /etc/runit/sv/wpa_supplicant/conf
 
-doas dhcpcd -k "$WIFI_IFACE" || true
-doas sv restart wpa_supplicant
+dhcpcd -k "$WIFI_IFACE" || true
+sv restart wpa_supplicant
 sleep 2
-doas dhcpcd -n "$WIFI_IFACE"
+dhcpcd -n "$WIFI_IFACE"
 
 echo "Wi-Fi -> $PROFILE"
 exit 0

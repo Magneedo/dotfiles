@@ -43,6 +43,9 @@ if ! pgrep -u "$uid" -f '^(/usr/lib/)?xdg-desktop-portal([[:space:]]|$)' >/dev/n
         >"$logdir/xdg-desktop-portal.log" 2>&1 &
 fi
 
+# Warm Brave without opening a window for Mod+B.
+brave-origin --no-startup-window >"$logdir/brave-origin.log" 2>&1 &
+
 foot --server >/dev/null 2>&1 &
 "$HOME/.local/bin/codexclaude" start >/dev/null 2>&1 &
 "$HOME/.local/bin/wallpaper" >/dev/null 2>&1 &

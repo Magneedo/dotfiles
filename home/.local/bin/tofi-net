@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+current=$(iw dev wlan0 link 2>/dev/null | sed -n 's/^[[:space:]]*SSID: //p') || current=""
+selection=$(
+    {
+        for conf in /etc/wpa_supplicant/*.conf; do
+            [ -e "$conf" ] && basename "$conf" .conf
+        done
+        echo eth
+    } |
+        flock -n -E 0 -o "${XDG_RUNTIME_DIR:?}/tofi-net.lock" \
+            tofi --history=false --prompt-text "net (${current:-off}): " \
+                --require-match=true --auto-accept-single=false
+)
+
+[ -n "$selection" ] || exit 0
+exec net "$selection"

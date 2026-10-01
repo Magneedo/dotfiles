@@ -142,10 +142,10 @@ default_iface() {
 wifi_ssid() {
     iface="$1"
 
-    command -v wpa_cli >/dev/null 2>&1 || return 1
+    command -v iw >/dev/null 2>&1 || return 1
 
-    wpa_cli -i "$iface" status 2>/dev/null |
-        sed -n 's/^ssid=//p'
+    iw dev "$iface" link 2>/dev/null |
+        sed -n 's/^[[:space:]]*SSID: //p'
 }
 
 net_str() {
@@ -193,11 +193,12 @@ while :; do
     bri="$(bright_str)"
 
     if [ "$tick" -eq 0 ] || [ "$tick" -ge 5 ]; then
-        net="$(net_str)"
+        # dwlb reads ^ as the start of a command; ^^ prints a literal ^.
+        net="$(net_str | sed 's/\^/^^/g')"
         tick=0
     fi
 
-    printf '[ bat %s | bri %s | vol %s | net %s | %s ]\n' \
+    printf '[ ^lm(tofi-power)^rm(tofi-power-profile)bat %s^rm()^lm() | bri %s | vol %s | ^lm(tofi-net)net %s^lm() | %s ]\n' \
         "$bat" \
         "$bri" \
         "$vol" \

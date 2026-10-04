@@ -6,11 +6,14 @@ set -eu
 # between the agents, and closing the popup never stops either one.
 tmux="tmux -L codexclaude"
 
-# Start an agent unless it is already running (it may have exited).
+# Start an agent in window $1 unless it is already running (it may have
+# exited).
 run() {
-    $tmux list-windows -t codexclaude -F '#W' 2>/dev/null | grep -qx "$1" && return
+    name=$1
+    shift
+    $tmux list-windows -t codexclaude -F '#W' 2>/dev/null | grep -qx "$name" && return
     if $tmux has-session -t codexclaude 2>/dev/null; then
-        $tmux new-window -d -t codexclaude -n "$1" -c "$HOME/Vault/Agents" "$@"
+        $tmux new-window -d -t codexclaude -n "$name" -c "$HOME/Vault/Agents" "$@"
     else
         # Without mouse mode, foot turns the wheel into arrow keys: prompt
         # history. No prefix key, so Ctrl+B still reaches Claude. The popup's
@@ -19,7 +22,7 @@ run() {
             set -g history-limit 50000 \; set -g prefix None \; \
             set -g set-titles on \; set -g set-titles-string '#W' \; \
             bind -n M-Tab next-window \; \
-            new-session -d -s codexclaude -n "$1" -c "$HOME/Vault/Agents" "$@"
+            new-session -d -s codexclaude -n "$name" -c "$HOME/Vault/Agents" "$@"
     fi
 }
 
@@ -27,7 +30,9 @@ if [ -z "${1-}" ] && [ -n "$($tmux list-clients 2>/dev/null)" ]; then
     exec $tmux detach-client -s codexclaude
 fi
 
-run codex --no-alt-screen
-run claude
+# Codex's sandbox needs a private socket folder on btrfs (openai/codex#47415).
+run codex bwrap --dev-bind / / --perms 700 --dir /tmp/codex-daemon-1000 \
+    --perms 700 --tmpfs /tmp/codex-daemon-1000 -- codex --no-alt-screen
+run claude claude
 
 [ "${1-}" = start ] || exec footclient --app-id=codexclaude $tmux attach -t codexclaude

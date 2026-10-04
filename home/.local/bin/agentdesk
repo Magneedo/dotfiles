@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+# The agents' own desktop: a headless dwl with its own seat, focus, pointer
+# and clipboard, so agents never touch the user's. wayvnc shows it in a
+# viewer on tag 10 (Mod+0), where the user can watch and take over.
+# "agentdesk CMD..." runs CMD on the desk, e.g. agentdesk grim shot.png.
+dir="$XDG_RUNTIME_DIR/agentdesk"
+user_display="${WAYLAND_DISPLAY-}"
+export WAYLAND_DISPLAY="$dir/wayland-0"
+viewer="vncviewer -FullScreen $dir/vnc"
+
+vnc() {
+    rm -f "$dir/vnc" "$dir/ctl"
+    wayvnc -u -S "$dir/ctl" "$dir/vnc" >>"$dir/log" 2>&1 &
+}
+
+case "${1-}" in
+start)
+    if ! wayvncctl -S "$dir/ctl" version >/dev/null 2>&1; then
+        # A viewer of a dead server shows nothing; a fresh one opens below.
+        pkill -u "$(id -u)" -fx "$viewer" || true
+        if wlr-randr >/dev/null 2>&1; then
+            vnc
+        else
+            mkdir -p "$dir"
+            # Fill the user's largest monitor; the viewer can't resize it.
+            size=$(WAYLAND_DISPLAY="$user_display" wlr-randr --json | jq -r '
+                [.[] | select(.enabled) | .scale as $s | .modes[] |
+                 select(.current) | [.width / $s, .height / $s | floor]] |
+                max_by(.[0] * .[1]) | "\(.[0])x\(.[1])"')
+            # The desk's socket goes in $dir, which Codex's sandbox may reach.
+            XDG_RUNTIME_DIR="$dir" WLR_BACKENDS=headless \
+                dwl -s "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' size=$size '$0' init" \
+                >"$dir/log" 2>&1 &
+        fi
+        if ! timeout 10 wayvncctl -w -S "$dir/ctl" version >/dev/null 2>&1; then
+            echo "agentdesk: the desk did not start, see $dir/log" >&2
+            exit 1
+        fi
+    fi
+    pgrep -u "$(id -u)" -fx "$viewer" >/dev/null || exec $viewer
+    ;;
+init)
+    wlr-randr --output HEADLESS-1 --custom-mode "$size"
+    vnc
+    exec brave-origin --user-data-dir="$HOME/.local/share/agentdesk/brave"
+    ;;
+*)
+    exec "$@"
+    ;;
+esac

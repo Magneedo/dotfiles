@@ -49,7 +49,6 @@ brave-origin --no-startup-window >"$logdir/brave-origin.log" 2>&1 &
 foot --server >/dev/null 2>&1 &
 mako >"$logdir/mako.log" 2>&1 &
 "$HOME/.local/bin/codexclaude" start >/dev/null 2>&1 &
-"$HOME/.local/bin/agentdesk" start >/dev/null 2>&1 &
 "$HOME/.local/bin/wallpaper" >/dev/null 2>&1 &
 # Lock after 10 idle minutes and before elogind suspends (lid close).
 swayidle -w timeout 600 'swaylock -f' before-sleep 'swaylock -f' >/dev/null 2>&1 &

@@ -1,0 +1,88 @@
+#!/bin/sh
+set -eu
+
+# Cards for the bar's clock: "bar-panel calendar" (left-click) shows the
+# month, "bar-panel history" (right-click) the agents' recent notifications.
+# Clicking again while the card is up closes it.
+kind=${1:?usage: bar-panel calendar|history}
+
+ids=$(makoctl list | awk -v app="  App name: $kind" '
+    /^Notification/ { id = $2; sub(":", "", id) }
+    $0 == app { print id }')
+if [ -n "$ids" ]; then
+    for id in $ids; do
+        makoctl dismiss -n "$id"
+    done
+    exit 0
+fi
+
+case $kind in
+calendar)
+    # cal's 3-character columns, spread to 6 so the grid fills the card.
+    body=$(cal | awk -v today="$(date +%_d)" 'NR > 1 && NF {
+        line = ""
+        for (i = 0; i < 7; i++) {
+            day = substr($0, 3 * i + 1, 2)
+            cell = "  " day "  "
+            if (NR > 2 && day == today)
+                cell = "<span background=\"#eeeeee\" foreground=\"#222222\">" cell "</span>"
+            line = line cell
+        }
+        print line
+    }')
+    notify-send -a calendar "$(date '+%A, %B %-d, %Y')" \
+        "$(date '+Week %V · Day %-j')
+
+$body"
+    ;;
+history)
+    # Lines are "- DATE TIME AM **title** (folder) summary", newest last.
+    body=$(grep -E '^- [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{1,2}:[0-9]{2} [AP]M \*\*.+\*\* \(' \
+        "$HOME/Vault/Agents/Notifications.md" 2>/dev/null | tail -n 10 | tac |
+        awk -v today="$(date +%F)" '
+        function esc(s) {
+            gsub(/&/, "\\&amp;", s); gsub(/</, "\\&lt;", s); gsub(/>/, "\\&gt;", s)
+            return s
+        }
+        # At most two 38-character lines, indented 4 to fill the card.
+        function wrap(s,    n, w, i, line, out, lines) {
+            n = split(s, w, " ")
+            for (i = 1; i <= n; i++) {
+                while (length(w[i]) > 38) {
+                    if (line != "") { out = out "\n" line; lines++; line = "" }
+                    out = out "\n" substr(w[i], 1, 38); lines++
+                    w[i] = substr(w[i], 39)
+                }
+                if (line == "") line = w[i]
+                else if (length(line) + 1 + length(w[i]) <= 38) line = line " " w[i]
+                else { out = out "\n" line; lines++; line = w[i] }
+            }
+            if (line != "") { out = out "\n" line; lines++ }
+            n = split(substr(out, 2), w, "\n")
+            out = "    " esc(w[1])
+            if (n >= 2) out = out "\n    " esc(n > 2 ? substr(w[2], 1, 37) "…" : w[2])
+            return out
+        }
+        BEGIN { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", mon, " ") }
+        {
+            line = substr($0, 3); day = substr(line, 1, 10); line = substr(line, 12)
+            i = index(line, " **"); time = substr(line, 1, i - 1); line = substr(line, i + 3)
+            i = index(line, "** ("); title = substr(line, 1, i - 1); line = substr(line, i + 4)
+            i = index(line, ")"); dir = substr(line, 1, i - 1); sum = substr(line, i + 2)
+            if (day != today) {
+                split(day, d, "-")
+                time = mon[d[2] + 0] " " d[3] + 0 ", " time
+            }
+            if (NR > 1) print "------------------------------------------"
+            print esc(time) "  <b>" esc(title) "</b>"
+            if (dir != "" && sum != "") sum = dir ": " sum
+            else sum = dir sum
+            if (sum != "") print wrap(sum)
+        }')
+    notify-send -a history "Notifications:" "${body:-No notifications yet}"
+    ;;
+*)
+    echo "usage: bar-panel calendar|history" >&2
+    exit 1
+    ;;
+esac

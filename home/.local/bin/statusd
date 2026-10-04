@@ -183,7 +183,7 @@ while :; do
         tick=0
     fi
 
-    printf '[ ^lm(tofi-power)^rm(tofi-power-profile)bat %s^rm()^lm() | bri %s | vol %s | ^lm(tofi-net)net %s^lm() | %s ]\n' \
+    printf '[ ^lm(tofi-power)^rm(tofi-power-profile)bat %s^rm()^lm() | bri %s | vol %s | ^lm(tofi-net)net %s^lm() | ^lm(bar-panel calendar)^rm(bar-panel history)%s^rm()^lm() ]\n' \
         "$bat" \
         "$bri" \
         "$vol" \

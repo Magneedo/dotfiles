@@ -2,17 +2,31 @@
 set -eu
 
 # The agents' own desktop: a headless dwl with its own seat, focus, pointer
-# and clipboard, so agents never touch the user's. wayvnc shows it in a
-# viewer on tag 10 (Mod+0), where the user can watch and take over.
-# "agentdesk CMD..." runs CMD on the desk, e.g. agentdesk grim shot.png.
+# and clipboard, so agents never touch the user's. "agentdesk start" starts
+# it when needed and shows it in a viewer on tag 10 (Mod+0), where the user
+# can watch and take over; "agentdesk stop" ends it. "agentdesk CMD..." runs
+# CMD on the desk, e.g. agentdesk grim shot.png.
 dir="$XDG_RUNTIME_DIR/agentdesk"
+
+case "${1-}" in
+start | stop)
+    # One start or stop at a time, so two agents can't race; flock -o keeps
+    # the lock away from the desk's processes.
+    mkdir -p "$dir"
+    [ -n "${AGENTDESK_LOCKED-}" ] ||
+        AGENTDESK_LOCKED=1 exec flock -o "$dir/lock" "$0" "$@"
+    ;;
+esac
+unset AGENTDESK_LOCKED
+
 user_display="${WAYLAND_DISPLAY-}"
 export WAYLAND_DISPLAY="$dir/wayland-0"
-viewer="vncviewer -FullScreen $dir/vnc"
+viewer="vncviewer $dir/vnc"
 
 vnc() {
     rm -f "$dir/vnc" "$dir/ctl"
-    wayvnc -u -S "$dir/ctl" "$dir/vnc" >>"$dir/log" 2>&1 &
+    # -r draws the desk's cursor into the picture; the viewer has none.
+    wayvnc -r -u -S "$dir/ctl" "$dir/vnc" >>"$dir/log" 2>&1 &
 }
 
 case "${1-}" in
@@ -23,23 +37,42 @@ start)
         if wlr-randr >/dev/null 2>&1; then
             vnc
         else
-            mkdir -p "$dir"
-            # Fit the laptop panel, the smallest monitor; the viewer can't resize.
+            rm -f "$dir/vnc" "$dir/ctl"
+            # Fill the viewer tiled on the laptop panel (the smallest monitor),
+            # less dwlb's 27 px bar and dwl's 3 px borders; it can't resize.
             size=$(WAYLAND_DISPLAY="$user_display" wlr-randr --json | jq -r '
                 [.[] | select(.enabled) | .scale as $s | .modes[] |
                  select(.current) | [.width / $s, .height / $s | floor]] |
-                min_by(.[0] * .[1]) | "\(.[0])x\(.[1])"')
+                min_by(.[0] * .[1]) | "\(.[0] - 6)x\(.[1] - 33)"')
             # The desk's socket goes in $dir, which Codex's sandbox may reach.
+            # Its arrow is the agent emblem (other cursors are Adwaita's).
             XDG_RUNTIME_DIR="$dir" WLR_BACKENDS=headless \
+                XCURSOR_PATH="$HOME/.local/share/agentdesk/icons:/usr/share/icons" \
                 dwl -s "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' size=$size '$0' init" \
                 >"$dir/log" 2>&1 &
+            echo $! >"$dir/pid"
         fi
         if ! timeout 10 wayvncctl -w -S "$dir/ctl" version >/dev/null 2>&1; then
             echo "agentdesk: the desk did not start, see $dir/log" >&2
             exit 1
         fi
     fi
-    pgrep -u "$(id -u)" -fx "$viewer" >/dev/null || exec $viewer
+    pgrep -u "$(id -u)" -fx "$viewer" >/dev/null ||
+        setsid -f $viewer >/dev/null 2>&1
+    ;;
+stop)
+    pid=$(cat "$dir/pid" 2>/dev/null) || exit 0
+    # Wait for it to end, so a following start can't find it half alive.
+    if [ "$(ps -o comm= -p "$pid")" = dwl ]; then
+        kill "$pid"
+        i=0
+        while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 50 ]; do
+            sleep 0.1
+            i=$((i + 1))
+        done
+        kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$dir/pid" "$dir/vnc" "$dir/ctl"
     ;;
 init)
     wlr-randr --output HEADLESS-1 --custom-mode "$size"

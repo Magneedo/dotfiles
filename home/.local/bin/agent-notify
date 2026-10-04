@@ -1,29 +1,29 @@
 #!/bin/sh
 set -eu
 
-# Claude and Codex hook (PermissionRequest and Stop, JSON on stdin) with
+# Claude and Codex hook (Notification and Stop, JSON on stdin) with
 # the agent's name as $1. Shows "Agent: reason" and logs it, with a summary,
 # to the Vault's notification history (bar-panel history shows it). An agent
-# may end a reply with "Notify: summary" or "Notify: high|medium | summary"
+# may end a reply with "Notify: summary" or "Notify: high|medium|approval | summary"
 # to set the summary and an urgency label.
 jq -r '
     def oneline: .[:1000] | gsub("[\\s\\x1f]+"; " ") | .[:160];
     ((.cwd // "") | split("/") | last // "" | oneline | gsub("[()]"; "")) as $dir |
     if .hook_event_name == "PermissionRequest" then
-        (.tool_input.command // .tool_input.description //
-            .tool_input.file_path // "" | tostring | oneline) as $x |
-        (.tool_name + if $x != "" then ": " + $x else "" end) as $t |
-        if .tool_name == "AskUserQuestion" then
-            ["", "normal", "Has a question", $dir, $t]
-        else ["", "critical", "Needs approval", $dir, $t] end
+        empty
+    elif .hook_event_name == "Notification" then
+        if .notification_type == "permission_prompt" then
+            ["", "critical", "Needs approval", $dir, (.message // "" | oneline)]
+        else empty end
     else
         (.last_assistant_message // "" | split("\n") |
          map(select(test("\\S")))) as $lines |
         ($lines | last // "" | capture("^\\s*Notify:\\s*" +
-            "((?<l>high|medium|low)\\s*\\|)?\\s*(?<t>.*)"; "i")
+            "((?<l>high|medium|low|approval)\\s*\\|)?\\s*(?<t>.*)"; "i")
          // {l: null, t: ""}) as $n |
         ($n.l // "" | ascii_downcase) as $l |
-        (if $l == "high" then ["High", "critical", "Needs you"]
+        (if $l == "approval" then ["", "critical", "Needs approval"]
+         elif $l == "high" then ["High", "critical", "Needs you"]
          elif $l == "medium" then ["Medium", "normal", "Has a question"]
          elif $l == "" and ($lines | last // "" | test("\\?\\s*$"))
          then ["", "normal", "Has a question"]
@@ -32,7 +32,7 @@ jq -r '
          (if $n.t != "" then $n.t else $lines[0] // "" end | oneline)]
     end | map(tostring) | join("\u001f")' |
 {
-    IFS=$(printf '\037') read -r level urgency reason dir detail
+    IFS=$(printf '\037') read -r level urgency reason dir detail || exit 0
     title="$1: $reason"
     [ -z "$level" ] || title="[$level] $title"
     # Agents read hook stdout, so keep it empty.

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# Claude and Codex hook (Notification and Stop, JSON on stdin) with
+# Claude and Codex hook (PreToolUse, Notification and Stop, JSON on stdin) with
 # the agent's name as $1. Shows "Agent: reason" and logs it, with a summary,
 # to the Vault's notification history (bar-panel history shows it). An agent
 # may end a reply with "Notify: summary" or "Notify: high|medium|approval | summary"
@@ -11,6 +11,20 @@ jq -r '
     ((.cwd // "") | split("/") | last // "" | oneline | gsub("[()]"; "")) as $dir |
     if .hook_event_name == "PermissionRequest" then
         empty
+    elif .hook_event_name == "PreToolUse" then
+        if (.tool_name == "request_user_input" or
+            .tool_name == "request_user_input_async") then
+            [.tool_input.questions[]? | .title // .question // "" |
+             select(test("\\S"))] as $questions |
+            if ($questions | length) == 0 then empty
+            elif any($questions[]; test("^\\s*Approval:"; "i")) then
+                ["", "critical", "Needs approval", $dir,
+                 ($questions | join(" ") | oneline)]
+            else
+                ["", "normal", "Has a question", $dir,
+                 ($questions | join(" ") | oneline)]
+            end
+        else empty end
     elif .hook_event_name == "Notification" then
         if .notification_type == "permission_prompt" then
             ["", "critical", "Needs approval", $dir, (.message // "" | oneline)]

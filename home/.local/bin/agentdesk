@@ -24,11 +24,11 @@ start)
             vnc
         else
             mkdir -p "$dir"
-            # Fill the user's largest monitor; the viewer can't resize it.
+            # Fit the laptop panel, the smallest monitor; the viewer can't resize.
             size=$(WAYLAND_DISPLAY="$user_display" wlr-randr --json | jq -r '
                 [.[] | select(.enabled) | .scale as $s | .modes[] |
                  select(.current) | [.width / $s, .height / $s | floor]] |
-                max_by(.[0] * .[1]) | "\(.[0])x\(.[1])"')
+                min_by(.[0] * .[1]) | "\(.[0])x\(.[1])"')
             # The desk's socket goes in $dir, which Codex's sandbox may reach.
             XDG_RUNTIME_DIR="$dir" WLR_BACKENDS=headless \
                 dwl -s "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' size=$size '$0' init" \

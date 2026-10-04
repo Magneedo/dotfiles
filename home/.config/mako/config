@@ -1,2 +1,8 @@
 anchor=bottom-right
 outer-margin=0,0,10,0
+
+[urgency=low]
+default-timeout=10000
+
+[urgency=critical]
+border-color=#ff5555

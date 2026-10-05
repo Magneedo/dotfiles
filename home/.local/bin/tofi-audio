@@ -16,12 +16,17 @@ devices=$(bluetoothctl devices Paired | while read -r _ mac name; do
     fi
 done)
 
-current=$(wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null |
-    sed -n 's/^.*node\.description = "\(.*\)"$/\1/p') || current=""
+# The current output, named as in the menu.
+info=$(wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null) || info=""
+case $info in
+'') current=none ;;
+*'node.name = "bluez_'*) current=$(printf '%s\n' "$info" | sed -n 's/^.*node\.description = "\(.*\)"$/\1/p') ;;
+*) current=speakers/aux ;;
+esac
 selection=$(
     { echo speakers/aux; [ -z "$devices" ] || printf '%s\n' "$devices" | cut -d' ' -f2-; } |
         flock -n -E 0 -o "${XDG_RUNTIME_DIR:?}/tofi-audio.lock" \
-            tofi --history=false --prompt-text "out (${current:-none}): " \
+            tofi --history=false --prompt-text "output: $current " \
                 --require-match=true --auto-accept-single=false
 )
 

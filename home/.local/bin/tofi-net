@@ -1,7 +1,15 @@
 #!/bin/sh
 set -eu
 
-current=$(iw dev wlan0 link 2>/dev/null | sed -n 's/^[[:space:]]*SSID: //p') || current=""
+ssid=$(iw dev wlan0 link 2>/dev/null | sed -n 's/^[[:space:]]*SSID: //p') || ssid=""
+# How it's connected, named as on the bar (statusd's net_str).
+dev=$(ip -o route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p') || dev=""
+case $dev in
+'') via=off ;;
+eth* | en*) via=eth ;;
+wl*) via=wifi ;;
+*) via=$dev ;;
+esac
 selection=$(
     {
         for conf in /etc/wpa_supplicant/*.conf; do
@@ -10,7 +18,7 @@ selection=$(
         echo eth
     } |
         flock -n -E 0 -o "${XDG_RUNTIME_DIR:?}/tofi-net.lock" \
-            tofi --history=false --prompt-text "net (${current:-off}): " \
+            tofi --history=false --prompt-text "network: ${ssid:+$ssid }[$via] " \
                 --require-match=true --auto-accept-single=false
 )
 

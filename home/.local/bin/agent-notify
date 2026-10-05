@@ -1,34 +1,36 @@
 #!/bin/sh
 set -eu
 
-# Claude and Codex hook (PreToolUse, Notification and Stop, JSON on stdin) with
-# the agent's name as $1. Shows "Agent: reason" and logs it, with a summary,
-# to the Vault's notification history (bar-panel history shows it). An agent
-# may end a reply with "Notify: summary" or "Notify: high|medium|approval | summary"
-# to set the summary and an urgency label.
+# Claude and Codex hook with the agent's name as $1: PermissionRequest
+# (Claude only: it fires when a dialog is shown, but Codex's fires before
+# automatic review), PreToolUse for Codex's question tools, and Stop. Shows
+# "Agent: reason" and logs it, with a summary, to the Vault's notification
+# history (bar-panel history shows it). An agent may end a reply with
+# "Notify: summary" or "Notify: high|medium|approval | summary" to set the
+# summary and an urgency label; a question starting "Approval:" is one.
 jq -r '
     def oneline: .[:1000] | gsub("[\\s\\x1f]+"; " ") | .[:160];
     ((.cwd // "") | split("/") | last // "" | oneline | gsub("[()]"; "")) as $dir |
+    def question:
+        [.tool_input.questions[]? | .title // .question // "" |
+         select(test("\\S"))] as $q |
+        if ($q | length) == 0 then empty
+        elif any($q[]; test("^\\s*Approval:"; "i")) then
+            ["", "critical", "Needs approval", $dir, ($q | join(" ") | oneline)]
+        else ["", "normal", "Has a question", $dir, ($q | join(" ") | oneline)] end;
     if .hook_event_name == "PermissionRequest" then
-        empty
+        if .tool_name == "AskUserQuestion" then question
+        else
+            (.tool_input.command // .tool_input.description //
+                .tool_input.file_path // "" | tostring | oneline) as $x |
+            ["", "critical", "Needs approval", $dir,
+             (.tool_name + if $x != "" then ": " + $x else "" end)]
+        end
     elif .hook_event_name == "PreToolUse" then
-        if (.tool_name == "request_user_input" or
-            .tool_name == "request_user_input_async") then
-            [.tool_input.questions[]? | .title // .question // "" |
-             select(test("\\S"))] as $questions |
-            if ($questions | length) == 0 then empty
-            elif any($questions[]; test("^\\s*Approval:"; "i")) then
-                ["", "critical", "Needs approval", $dir,
-                 ($questions | join(" ") | oneline)]
-            else
-                ["", "normal", "Has a question", $dir,
-                 ($questions | join(" ") | oneline)]
-            end
+        if (.tool_name | test("^request_user_input(_async)?$")) then question
         else empty end
-    elif .hook_event_name == "Notification" then
-        if .notification_type == "permission_prompt" then
-            ["", "critical", "Needs approval", $dir, (.message // "" | oneline)]
-        else empty end
+    elif .hook_event_name != "Stop" then
+        empty
     else
         (.last_assistant_message // "" | split("\n") |
          map(select(test("\\S")))) as $lines |

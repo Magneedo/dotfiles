@@ -5,7 +5,7 @@ current=$(/usr/local/sbin/power-profile status)
 selection=$(
     printf '%s\n' 'battery-saver' normal performance |
         flock -n -E 0 -o "${XDG_RUNTIME_DIR:?}/tofi-power-profile.lock" \
-            tofi --history=false --prompt-text "profile ($current): " \
+            tofi --history=false --prompt-text "profile: $current " \
                 --require-match=true --auto-accept-single=false
 )
 

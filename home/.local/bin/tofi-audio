@@ -1,0 +1,53 @@
+#!/bin/sh
+set -eu
+
+# Bar's vol right-click: pick the output. "speakers/aux" takes the wired
+# sink WirePlumber would pick (the dock if docked, else the laptop, which
+# switches to its jack by itself); the rest are paired Bluetooth headphones.
+sink_id() {
+    pw-dump | jq -r --arg re "$1" '[.[] | select(.type == "PipeWire:Interface:Node")
+        | .info.props | select(."media.class" == "Audio/Sink" and (."node.name" | test($re)))]
+        | max_by(."priority.session" // 0) | ."object.id" // empty'
+}
+
+devices=$(bluetoothctl devices Paired | while read -r _ mac name; do
+    if bluetoothctl info "$mac" | grep -q 'UUID: Audio Sink'; then
+        printf '%s %s\n' "$mac" "$name"
+    fi
+done)
+
+current=$(wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null |
+    sed -n 's/^.*node\.description = "\(.*\)"$/\1/p') || current=""
+selection=$(
+    { echo speakers/aux; [ -z "$devices" ] || printf '%s\n' "$devices" | cut -d' ' -f2-; } |
+        flock -n -E 0 -o "${XDG_RUNTIME_DIR:?}/tofi-audio.lock" \
+            tofi --history=false --prompt-text "out (${current:-none}): " \
+                --require-match=true --auto-accept-single=false
+)
+
+case "$selection" in
+'') exit 0 ;;
+speakers/aux) id=$(sink_id '^(?!bluez_)') ;;
+*)
+    mac=$(printf '%s\n' "$devices" | n=$selection awk 'substr($0, 19) == ENVIRON["n"] { print $1; exit }')
+    [ -n "$mac" ] || exit 1
+    bluetoothctl power on >/dev/null
+    bluetoothctl connect "$mac" >/dev/null || {
+        notify-send -a audio "Couldn't connect $selection"
+        exit 1
+    }
+    # The sink shows up a moment after the connection.
+    re="^bluez_output\\.$(printf '%s' "$mac" | tr : _)\\."
+    i=0
+    while id=$(sink_id "$re") && [ -z "$id" ] && [ "$i" -lt 20 ]; do
+        sleep 0.5
+        i=$((i + 1))
+    done
+    ;;
+esac
+
+[ -n "$id" ] || {
+    notify-send -a audio "No audio output for $selection"
+    exit 1
+}
+exec wpctl set-default "$id"

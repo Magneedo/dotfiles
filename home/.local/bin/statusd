@@ -183,7 +183,7 @@ while :; do
         tick=0
     fi
 
-    printf '[ ^lm(tofi-power)^rm(tofi-power-profile)bat %s^rm()^lm() | bri %s | ^lm(wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle)^us(wpctl set-volume @DEFAULT_AUDIO_SINK@ 1%%+)^ds(wpctl set-volume @DEFAULT_AUDIO_SINK@ 1%%-)vol %s^ds()^us()^lm() | ^lm(tofi-net)net %s^lm() | ^lm(bar-panel calendar)^rm(bar-panel history)%s^rm()^lm() ]\n' \
+    printf '[ ^lm(tofi-power)^rm(tofi-power-profile)bat %s^rm()^lm() | bri %s | ^lm(wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle)^rm(tofi-audio)^us(wpctl set-volume @DEFAULT_AUDIO_SINK@ 1%%+)^ds(wpctl set-volume @DEFAULT_AUDIO_SINK@ 1%%-)vol %s^ds()^us()^rm()^lm() | ^lm(tofi-net)net %s^lm() | ^lm(bar-panel calendar)^rm(bar-panel history)%s^rm()^lm() ]\n' \
         "$bat" \
         "$bri" \
         "$vol" \

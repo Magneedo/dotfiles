@@ -1,0 +1,240 @@
+#!/usr/bin/env python3
+# mcp-lazy [--stop-after TOOL] CMD [ARG...]: run the stdio MCP server CMD only
+# while it is used. It starts at the first tool call and, with --stop-after,
+# stops once a call to TOOL returns and nothing else is pending. Meanwhile
+# initialize and tools/list are answered from the server's answers last time,
+# kept in ~/.cache/mcp-lazy and keyed on CMD and the client's initialize
+# parameters: the tool list must not depend on anything else (environment).
+import hashlib, itertools, json, os, signal, subprocess, sys, threading, uuid
+
+args = sys.argv[1:]
+stop_tool = args[1] if args[:1] == ['--stop-after'] else None
+cmd = args[2:] if stop_tool else args
+tag = 'mcp-lazy-%s-' % uuid.uuid4().hex  # ids of the proxy's own requests
+lock = threading.RLock()
+out = threading.Lock()
+cache = init = answers = waiting = child = None
+servers = set()  # live servers, including ones being stopped
+asked = {}       # proxy id of a server's request to the client -> (server, id)
+seq = itertools.count()
+
+
+def send(msg):
+    line = msg if isinstance(msg, str) else json.dumps({'jsonrpc': '2.0', **msg}) + '\n'
+    with out:
+        sys.stdout.write(line)
+        sys.stdout.flush()
+
+
+def error(i, text):
+    send({'id': i, 'error': {'code': -32603, 'message': text}})
+
+
+def load():
+    try:
+        with open(cache) as f:
+            a = json.load(f)
+        if isinstance(a['initialize'], dict) and isinstance(a['tools/list']['tools'], list):
+            return a
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+
+
+def save(a):
+    os.makedirs(os.path.dirname(cache), exist_ok=True)
+    tmp = '%s.%d' % (cache, os.getpid())
+    with open(tmp, 'w') as f:
+        json.dump(a, f)
+    os.replace(tmp, cache)
+
+
+class Server:
+    def __init__(self):
+        self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                     text=True, start_new_session=True)
+        self.queue = []       # client messages held until the handshake is done
+        self.pending = set()  # client requests not yet answered
+        self.closing = set()  # stop_tool calls among them
+        self.ready = self.retiring = self.stopping = False
+        servers.add(self)
+        threading.Thread(target=self.pump, daemon=True).start()
+        t = threading.Timer(30, self.timeout)
+        t.daemon = True
+        t.start()
+        self.write({'id': tag + 'init', 'method': 'initialize', 'params': init.get('params', {})})
+
+    def write(self, msg):
+        try:
+            self.proc.stdin.write(msg if isinstance(msg, str) else
+                                  json.dumps({'jsonrpc': '2.0', **msg}) + '\n')
+            self.proc.stdin.flush()
+        except (OSError, ValueError):
+            pass  # it is stopping; pump() reports the exit
+
+    # A message from the client for this server.
+    def take(self, line, msg):
+        method, i = msg.get('method'), msg.get('id')
+        if i is not None:
+            self.pending.add(i)
+            if method == 'tools/call' and msg.get('params', {}).get('name') == stop_tool:
+                self.closing.add(i)
+        elif method == 'notifications/cancelled':
+            self.done(msg.get('params', {}).get('requestId'))
+        if self.ready:
+            self.write(line)
+        else:
+            self.queue.append(line)
+        self.idle()
+
+    def done(self, i):
+        self.pending.discard(i)
+        if i in self.closing:
+            self.closing.discard(i)
+            self.retire()
+
+    def retire(self):
+        global child
+        self.retiring = True
+        if child is self:
+            child = None  # new requests start a new server
+
+    def idle(self):
+        if self.retiring and not self.pending:
+            self.stop()
+
+    def pump(self):
+        for line in self.proc.stdout:
+            try:
+                msg = json.loads(line)
+            except ValueError:
+                continue
+            with lock:
+                self.handle(line, msg)
+        with lock:
+            self.fail('The MCP server exited.')
+
+    def handle(self, line, msg):
+        i = msg.get('id')
+        if 'method' not in msg and i in (tag + 'init', tag + 'tools'):
+            return self.handshake(i, msg)
+        if 'method' in msg:
+            if i is not None:  # servers may reuse each other's ids
+                msg['id'] = tag + 'r%d' % next(seq)
+                asked[msg['id']] = (self, i)
+                line = json.dumps(msg) + '\n'
+        else:
+            self.done(i)
+        send(line)
+        self.idle()
+
+    # Repeat the client's handshake, refresh the cache, then pass the held
+    # messages on.
+    def handshake(self, i, msg):
+        global answers, waiting
+        if 'result' not in msg:
+            return self.fail('The MCP server failed to start: %s' % json.dumps(msg.get('error')))
+        if i == tag + 'init':
+            self.initialize = msg['result']
+            self.write({'method': 'notifications/initialized'})
+            self.write({'id': tag + 'tools', 'method': 'tools/list', 'params': {}})
+            return
+        answers = {'initialize': self.initialize, 'tools/list': msg['result']}
+        save(answers)
+        if waiting is not None:
+            send({'id': waiting, 'result': answers['initialize']})
+            waiting = None
+        self.ready = True
+        for line in self.queue:
+            self.write(line)
+        self.queue = []
+        if not self.pending:
+            self.retire()  # started only to fill the cache
+            self.stop()
+
+    def timeout(self):
+        with lock:
+            if not self.ready:
+                self.fail('The MCP server did not start within 30 s.')
+
+    def fail(self, text):
+        global waiting
+        self.retire()
+        for i in self.pending:
+            error(i, text)
+        self.pending.clear()
+        if waiting is not None and not self.ready:
+            error(waiting, text)
+            waiting = None
+        self.stop()
+
+    # Close its input, then escalate until it exits.
+    def stop(self):
+        if self.stopping:
+            return
+        self.stopping = True
+        try:
+            self.proc.stdin.close()
+        except OSError:
+            pass
+        threading.Thread(target=self.end, daemon=False).start()  # exit waits
+
+    def end(self):
+        for sig in (None, signal.SIGTERM, signal.SIGKILL):
+            if sig:
+                try:
+                    os.killpg(self.proc.pid, sig)
+                except ProcessLookupError:
+                    pass
+            try:
+                self.proc.wait(5)
+                break
+            except subprocess.TimeoutExpired:
+                pass
+        with lock:
+            servers.discard(self)
+
+
+for line in sys.stdin:
+    try:
+        msg = json.loads(line)
+    except ValueError:
+        continue
+    method, i = msg.get('method'), msg.get('id')
+    with lock:
+        if method == 'initialize':
+            init = msg
+            key = json.dumps([cmd, msg.get('params')], sort_keys=True)
+            cache = os.path.expanduser('~/.cache/mcp-lazy/%s.json'
+                                       % hashlib.sha256(key.encode()).hexdigest()[:16])
+            answers = load()
+            if answers:
+                send({'id': i, 'result': answers['initialize']})
+            else:
+                waiting = i
+                child = Server()
+        elif method == 'notifications/initialized':
+            pass  # each server gets its own
+        elif method is None:  # the client's reply to a server's request
+            s, msg['id'] = asked.pop(i, (None, i))
+            if s:
+                s.write(json.dumps(msg) + '\n')
+        elif method == 'notifications/cancelled':
+            r = msg.get('params', {}).get('requestId')
+            for s in list(servers):
+                if r in s.pending:
+                    s.take(line, msg)
+        elif child:
+            child.take(line, msg)
+        elif method == 'tools/list' and answers:
+            send({'id': i, 'result': answers['tools/list']})
+        elif method == 'ping':
+            send({'id': i, 'result': {}})
+        elif method == 'tools/call' and msg.get('params', {}).get('name') == stop_tool:
+            send({'id': i, 'result': {'content': [{'type': 'text', 'text': 'Not running.'}]}})
+        elif i is not None:
+            child = Server()
+            child.take(line, msg)
+
+with lock:
+    for s in list(servers):
+        s.stop()

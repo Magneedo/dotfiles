@@ -31,8 +31,11 @@ if [ -z "${1-}" ] && [ -n "$($tmux list-clients 2>/dev/null)" ]; then
 fi
 
 # Codex's sandbox needs a private socket folder on btrfs (openai/codex#47415).
+# Codex exits if it can't reach its servers at start (no network yet at
+# login), so retry until it starts; /quit exits 0 and ends the loop.
 run codex bwrap --dev-bind / / --perms 700 --dir /tmp/codex-daemon-1000 \
-    --perms 700 --tmpfs /tmp/codex-daemon-1000 -- codex --no-alt-screen
+    --perms 700 --tmpfs /tmp/codex-daemon-1000 -- \
+    sh -c 'until codex --no-alt-screen; do sleep 5; done'
 run claude claude
 
 [ "${1-}" = start ] || exec footclient --app-id=codexclaude $tmux attach -t codexclaude

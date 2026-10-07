@@ -68,15 +68,13 @@ history)
             line = substr($0, 3); day = substr(line, 1, 10); line = substr(line, 12)
             i = index(line, " **"); time = substr(line, 1, i - 1); line = substr(line, i + 3)
             i = index(line, "** ("); title = substr(line, 1, i - 1); line = substr(line, i + 4)
-            i = index(line, ")"); dir = substr(line, 1, i - 1); sum = substr(line, i + 2)
+            sum = substr(line, index(line, ")") + 2)
             if (day != today) {
                 split(day, d, "-")
                 time = mon[d[2] + 0] " " d[3] + 0 ", " time
             }
             if (NR > 1) print "------------------------------------------"
             print esc(time) "  <b>" esc(title) "</b>"
-            if (dir != "" && sum != "") sum = dir ": " sum
-            else sum = dir sum
             if (sum != "") print wrap(sum)
         }')
     notify-send -a history "Notifications:" "${body:-No notifications yet}"

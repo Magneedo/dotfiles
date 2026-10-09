@@ -6,9 +6,10 @@ set -eu
 # automatic review), PreToolUse for Codex's question tools, and Stop. Shows
 # "Agent: reason" and logs it, with a summary, to the Vault's notification
 # history (bar-panel history shows it). An agent may end a reply with
-# "Notify: summary" or "Notify: high|medium|approval | summary" to set the
-# summary and an urgency label; a question starting "Approval:" is one.
-jq -r '
+# "Notify: summary" or "Notify: high|medium|approval|review | summary" to set
+# the summary and a label; a question starting "Approval:" is one. "review"
+# means the other agent is still reviewing the work.
+jq -r --arg agent "$1" '
     def oneline: .[:1000] | gsub("[\\s\\x1f]+"; " ") | .[:160];
     ((.cwd // "") | split("/") | last // "" | oneline | gsub("[()]"; "")) as $dir |
     def question:
@@ -35,12 +36,14 @@ jq -r '
         (.last_assistant_message // "" | split("\n") |
          map(select(test("\\S")))) as $lines |
         ($lines | last // "" | capture("^\\s*Notify:\\s*" +
-            "((?<l>high|medium|low|approval)\\s*\\|)?\\s*(?<t>.*)"; "i")
+            "((?<l>high|medium|low|approval|review)\\s*\\|)?\\s*(?<t>.*)"; "i")
          // {l: null, t: ""}) as $n |
         ($n.l // "" | ascii_downcase) as $l |
         (if $l == "approval" then ["", "critical", "Needs approval"]
          elif $l == "high" then ["High", "critical", "Needs you"]
          elif $l == "medium" then ["Medium", "normal", "Has a question"]
+         elif $l == "review" then ["", "low", "In review by " +
+             if $agent == "Codex" then "Claude" else "Codex" end]
          elif $l == "" and ($lines | last // "" | test("\\?\\s*$"))
          then ["", "normal", "Has a question"]
          else ["", "low", "Finished"] end) +

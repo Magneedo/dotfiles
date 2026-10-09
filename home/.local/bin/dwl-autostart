@@ -3,6 +3,8 @@ set -eu
 
 uid="$(id -u)"
 logdir="${XDG_RUNTIME_DIR:-/tmp}"
+visible="$logdir/dwl-visible-${WAYLAND_DISPLAY##*/}"
+rm -f "$visible" "$visible.tmp"
 
 dbus-update-activation-environment \
     WAYLAND_DISPLAY \
@@ -64,4 +66,23 @@ swayidle -w timeout 600 'swaylock -f' before-sleep 'swaylock -f' >/dev/null 2>&1
         done
 ) >"$logdir/dwlb-status.log" 2>&1 &
 
-exec dwlb
+# Keep the compositor's visibility snapshot for notification hooks.
+(
+    trap 'rm -f "$visible" "$visible.tmp"' EXIT
+    trap 'exit' HUP INT TERM
+    while IFS= read -r line; do
+        case "$line" in
+        visible | visible\ *)
+            [ "$line" = "${last-}" ] && continue
+            if { printf '%s\n' "$line" >"$visible.tmp" &&
+                mv -f "$visible.tmp" "$visible"; } 2>/dev/null; then
+                last=$line
+            else
+                last=
+                rm -f "$visible" "$visible.tmp" 2>/dev/null || true
+            fi
+            ;;
+        *) printf '%s\n' "$line" ;;
+        esac
+    done
+) | dwlb

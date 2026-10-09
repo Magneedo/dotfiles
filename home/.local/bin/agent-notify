@@ -55,7 +55,22 @@ jq -r --arg agent "$1" '
     title="$1: $reason"
     [ -z "$level" ] || title="[$level] $title"
     # Agents read hook stdout, so keep it empty.
-    notify-send -a agent -u "$urgency" "$title" >/dev/null
+    # A running tmux server alone does not mean its popup is visible.
+    # Missing compositor state keeps notifications enabled.
+    display=${WAYLAND_DISPLAY-}
+    visible=$(cat "${XDG_RUNTIME_DIR:-/tmp}/dwl-visible-${display##*/}" 2>/dev/null) || visible=
+    case " $visible " in
+    *" codexclaude "*)
+        # Alt+Tab can hide this agent inside an otherwise visible popup.
+        if [ -z "${TMUX-}" ] || [ -z "${TMUX_PANE-}" ] ||
+            ! tmux list-clients -t codexclaude -F '#{pane_id}' 2>/dev/null |
+                grep -Fxq -- "${TMUX_PANE-}"; then
+            visible=
+        fi
+        ;;
+    *) visible= ;;
+    esac
+    [ -n "$visible" ] || notify-send -a agent -u "$urgency" "$title" >/dev/null
     printf -- '- %s **%s** (%s) %s\n' "$(date +'%F %-I:%M %p')" "$title" "$dir" \
         "$detail" >>"$HOME/Vault/Agents/Notifications.md"
 }

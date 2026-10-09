@@ -1,0 +1,19 @@
+#!/bin/sh
+# Lock the session with hyprlock, and return only once it is locked, so
+# swayidle's before-sleep and hibernate can rely on it. hyprlock can't fork
+# after locking, so watch its log: onLockLocked means locked, and
+# onLockFinished means the compositor refused because another lock already
+# holds the session. If hyprlock exits or doesn't lock within 3 s, fall back
+# to swaylock, which forks only once locked; fail only if that fails too.
+log=$(mktemp -p "${XDG_RUNTIME_DIR:?}" hyprlock.XXXXXX)
+trap 'rm -f "$log"' EXIT
+hyprlock >"$log" 2>&1 &
+i=0
+while sleep 0.1; do
+    grep -q onLockLocked "$log" && exit 0
+    # A refused hyprlock keeps running, so end it.
+    grep -q onLockFinished "$log" && { kill $!; exit 0; }
+    kill -0 $! 2>/dev/null && [ $((i += 1)) -lt 30 ] || break
+done
+kill $! 2>/dev/null
+swaylock -f

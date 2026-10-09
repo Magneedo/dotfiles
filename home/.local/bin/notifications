@@ -1,0 +1,48 @@
+#!/bin/sh
+set -eu
+
+# Recent notifications for the lock screen. mako runs "notifications add ID"
+# for each one it shows (on-notify), which logs its time, title and body;
+# hyprlock's label runs "notifications" to print the last five, newest first,
+# as Pango markup. The log is in $XDG_RUNTIME_DIR, so it is private and gone
+# after a reboot.
+log="${XDG_RUNTIME_DIR:-/tmp}/notifications"
+
+case "${1-}" in
+add)
+    # mako runs this as the notification opens; a short one may already be in
+    # its history. Bodies are markup (mako advertises body-markup): keep the
+    # text, decoding entities in one pass.
+    python3 -Ic '
+import html, json, re, subprocess, sys, time
+for cmd in "list", "history":
+    out = subprocess.run(["makoctl", cmd, "-j"], capture_output=True, text=True).stdout
+    for n in json.loads(out or "[]"):
+        if n["id"] == int(sys.argv[1]):
+            body = html.unescape(re.sub("<[^>]*>", "", n.get("body") or ""))
+            text = [" ".join(t.split()) for t in (n.get("summary") or "", body)]
+            print(time.strftime("%F %-I:%M %p"), *text, sep=chr(9))
+            sys.exit()' "$2" >>"$log"
+    ;;
+"")
+    tail -n 5 "$log" 2>/dev/null | tac | awk -F '\t' -v today="$(date +%F)" '
+        function esc(s) {
+            gsub(/&/, "\\&amp;", s); gsub(/</, "\\&lt;", s); gsub(/>/, "\\&gt;", s)
+            return s
+        }
+        BEGIN { split("Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec", mon, " ") }
+        {
+            time = substr($1, 12)
+            if (substr($1, 1, 10) != today) {
+                split($1, d, "[- ]")
+                time = mon[d[2] + 0] " " d[3] + 0 ", " time
+            }
+            print esc(time) "  <b>" esc($2) "</b>"
+            if ($3 != "") print "    " esc(length($3) > 60 ? substr($3, 1, 59) "…" : $3)
+        }'
+    ;;
+*)
+    echo "usage: notifications [add ID]" >&2
+    exit 1
+    ;;
+esac

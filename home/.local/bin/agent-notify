@@ -61,6 +61,16 @@ jq -r --arg agent "$1" '
     visible=$(cat "${XDG_RUNTIME_DIR:-/tmp}/dwl-visible-${display##*/}" 2>/dev/null) || visible=
     case " $visible " in
     *" codexclaude "*)
+        # Claude's daemon drops TMUX and TMUX_PANE from background jobs, so
+        # take them from the nearest ancestor that has them.
+        p=$PPID
+        while [ -z "${TMUX_PANE-}" ] && [ "$p" -gt 1 ] 2>/dev/null; do
+            e=/proc/$p/environ
+            TMUX=$(sed -zn 's/^TMUX=//p' "$e" 2>/dev/null | tr -d '\0')
+            TMUX_PANE=$(sed -zn 's/^TMUX_PANE=//p' "$e" 2>/dev/null | tr -d '\0')
+            p=$(sed -n 's/^PPid:\s*//p' "/proc/$p/status" 2>/dev/null) || p=
+        done
+        export TMUX TMUX_PANE
         # Alt+Tab can hide this agent inside an otherwise visible popup.
         if [ -z "${TMUX-}" ] || [ -z "${TMUX_PANE-}" ] ||
             ! tmux list-clients -t codexclaude -F '#{pane_id}' 2>/dev/null |
@@ -70,7 +80,8 @@ jq -r --arg agent "$1" '
         ;;
     *) visible= ;;
     esac
-    [ -n "$visible" ] || notify-send -a agent -u "$urgency" "$title" >/dev/null
+    [ -n "$visible" ] ||
+        notify-send -a agent -u "$urgency" "$title" >/dev/null 2>&1 || :
     printf -- '- %s **%s** (%s) %s\n' "$(date +'%F %-I:%M %p')" "$title" "$dir" \
         "$detail" >>"$HOME/Vault/Agents/Notifications.md"
 }

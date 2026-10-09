@@ -6,8 +6,8 @@ if [ "$(id -u)" -eq 0 ] || [ -z "${WAYLAND_DISPLAY:-}" ]; then
     exit 1
 fi
 
-# lock returns only once the session is locked, and fails otherwise.
-lock
+# -f returns only after swaylock has locked the session.
+swaylock -f
 # Avoid an authentication prompt hidden behind the lock screen.
 printf '%s\n' disk | doas -n /usr/bin/tee /sys/power/state >/dev/null
 doas -n /usr/local/sbin/power-profile resume

@@ -80,10 +80,8 @@ jq -r --arg agent "$1" '
         ;;
     *) visible= ;;
     esac
-    # The body is markup that only the lock screen shows (notifications).
     [ -n "$visible" ] ||
-        notify-send -a agent -u "$urgency" -- "$title" "$(printf '%s' "$detail" |
-            sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')" >/dev/null 2>&1 || :
+        notify-send -a agent -u "$urgency" "$title" >/dev/null 2>&1 || :
     printf -- '- %s **%s** (%s) %s\n' "$(date +'%F %-I:%M %p')" "$title" "$dir" \
         "$detail" >>"$HOME/Vault/Agents/Notifications.md"
 }

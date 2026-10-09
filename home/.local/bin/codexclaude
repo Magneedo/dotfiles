@@ -36,6 +36,9 @@ fi
 run codex bwrap --dev-bind / / --perms 700 --dir /tmp/codex-daemon-1000 \
     --perms 700 --tmpfs /tmp/codex-daemon-1000 -- \
     sh -c 'until codex --no-alt-screen; do sleep 5; done'
-run claude claude
+# Claude's default fullscreen renderer takes the mouse wheel; the classic one
+# leaves scrolling to tmux's copy mode (with its position indicator), as Codex
+# does with --no-alt-screen.
+run claude env CLAUDE_CODE_NO_FLICKER=0 claude
 
 [ "${1-}" = start ] || exec footclient --app-id=codexclaude $tmux attach -t codexclaude

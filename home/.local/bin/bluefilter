@@ -1,27 +1,49 @@
 #!/bin/sh
+# Blue light filter strength, 0 (off) to 100% (MIN kelvin). "down" steps to the
+# next stronger level (Mod+Shift+BrightnessDown), "up" to the next weaker one,
+# "menu" picks a level in tofi (the bar's bri left-click), and 0-100 sets it.
 command -v gammastep >/dev/null 2>&1 || exit 1
-STEP=10
+LEVELS="0 10 25 50 75 100"
 MIN=1500
 MAX=6500
-DEFAULT=60
 STATE="$HOME/.local/state/bluefilter.level"
 mkdir -p "${STATE%/*}"
-L="$(cat "$STATE" 2>/dev/null || true)"
-case "$L" in
-  ''|*[!0-9]* ) L=off ;;
-  * ) [ "$L" -ge 0 ] 2>/dev/null && [ "$L" -le 100 ] 2>/dev/null || L=off ;;
-esac
-case "${1:-}" in up|down) ;; *) echo "Usage: $(basename "$0") up|down" >&2; exit 1 ;; esac
-if [ "$L" = off ]; then
-  L="$DEFAULT"
-else
-  if [ "$1" = up ]; then
-    L=$((L+STEP)); [ "$L" -gt 100 ] && L=100
-  else
-    L=$((L-STEP)); [ "$L" -lt 0 ] && L=0
-  fi
+
+level() {
+  L="$(cat "$STATE" 2>/dev/null || true)"
+  case "$L" in ''|*[!0-9]*|0?*) L=0 ;; esac
+  [ "$L" -le 100 ] || L=100
+}
+
+if [ "${1:-}" = menu ]; then
+  level
+  [ "$L" -gt 0 ] && cur="$L%" || cur=off
+  pick=$(
+    printf '%s\n' off 10% 25% 50% 75% 100% |
+      flock -n -E 0 -o "${XDG_RUNTIME_DIR:?}/tofi-bluefilter.lock" \
+        tofi --history=false --prompt-text "filter: $cur " \
+          --require-match=true --auto-accept-single=false
+  )
+  case "$pick" in
+    '') exit 0 ;;
+    off) set -- 0 ;;
+    *) set -- "${pick%\%}" ;;
+  esac
 fi
-TEMP=$((MIN + (L*(MAX-MIN))/100))
-pkill -x gammastep 2>/dev/null || true
-gammastep -P -O "$TEMP" || exit $?
+
+# A held key starts runs at once; take turns so each steps from the last.
+exec 9>"${XDG_RUNTIME_DIR:?}/bluefilter.lock"
+flock 9
+level
+case "${1:-}" in
+  down) for l in $LEVELS; do [ "$l" -gt "$L" ] && { L=$l; break; }; done ;;
+  up) n=0; for l in $LEVELS; do [ "$l" -lt "$L" ] && n=$l; done; L=$n ;;
+  ''|*[!0-9]*|0?*) echo "Usage: $(basename "$0") up|down|menu|0-100" >&2; exit 1 ;;
+  *) L=$1; [ "$L" -le 100 ] || L=100 ;;
+esac
 printf '%s' "$L" > "$STATE"
+
+# On Wayland gammastep -O keeps running, since the gamma resets when it exits.
+pkill -x gammastep && pidwait -x gammastep
+[ "$L" -gt 0 ] || exit 0
+exec gammastep -P -O $((MAX - L * (MAX - MIN) / 100)) 9>&-

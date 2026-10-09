@@ -6,8 +6,6 @@ outer-margin=0,0,10,0
 font=Noto Sans Mono 11
 width=392
 height=1100
-# Log each notification for the lock screen (see notifications).
-on-notify=exec notifications add "$id"
 
 [urgency=low]
 default-timeout=10000
@@ -16,21 +14,15 @@ default-timeout=10000
 border-color=#ff0000
 
 [app-name=calendar]
-on-notify=none
 default-timeout=20000
 on-button-left=dismiss
 
 [app-name=history]
-on-notify=none
 default-timeout=20000
 on-button-left=dismiss
 
-# Agent pop-ups (agent-notify) are a one-line title, with the summary in the
-# body for the lock screen only: size each card to the title, 9 px per
-# character plus the 5 px padding and 2 px border on each side.
-
-[app-name=agent]
-format=<b>%s</b>
+# Agent pop-ups (agent-notify) are a one-line title: size each card to it,
+# 9 px per character plus the 5 px padding and 2 px border on each side.
 
 [app-name=agent summary~="^.{10}$"]
 width=104

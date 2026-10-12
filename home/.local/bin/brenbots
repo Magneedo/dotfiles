@@ -1,0 +1,45 @@
+#!/bin/sh
+set -eu
+
+# Codex, Claude and Muse run in their own tmux server, started by
+# dwl-autostart. Mod+c opens the popup or closes it if it is already open,
+# Alt+Tab cycles through the agents, and closing the popup never stops any.
+tmux="tmux -L brenbots"
+
+# Start an agent in window $1 unless it is already running (it may have
+# exited).
+run() {
+    name=$1
+    shift
+    $tmux list-windows -t brenbots -F '#W' 2>/dev/null | grep -qx "$name" && return
+    if $tmux has-session -t brenbots 2>/dev/null; then
+        $tmux new-window -d -t brenbots -n "$name" -c "$HOME/Vault/Agents" "$@"
+    else
+        # Without mouse mode, foot turns the wheel into arrow keys: prompt
+        # history. No prefix key, so Ctrl+B still reaches Claude. The popup's
+        # title, shown in the bar, names the agent on screen.
+        $tmux set -g status off \; set -g mouse on \; \
+            set -g history-limit 50000 \; set -g prefix None \; \
+            set -g set-titles on \; set -g set-titles-string '#W' \; \
+            bind -n M-Tab next-window \; \
+            new-session -d -s brenbots -n "$name" -c "$HOME/Vault/Agents" "$@"
+    fi
+}
+
+if [ -z "${1-}" ] && [ -n "$($tmux list-clients 2>/dev/null)" ]; then
+    exec $tmux detach-client -s brenbots
+fi
+
+# Codex exits if it can't reach its servers at start (no network yet at
+# login), so retry until it starts; /quit exits 0 and ends the loop.
+run codex sh -c 'until codex --no-alt-screen; do sleep 5; done'
+# Claude's default fullscreen renderer takes the mouse wheel; the classic one
+# leaves scrolling to tmux's copy mode (with its position indicator), as Codex
+# does with --no-alt-screen.
+run claude env CLAUDE_CODE_NO_FLICKER=0 claude
+# Muse Code is installed separately (brenOS docs/secrets.md); contributor mode
+# would let Meta train on this Vault.
+command -v muse >/dev/null &&
+    run muse muse --model muse-wonder-1.0 --contributor-mode off
+
+[ "${1-}" = start ] || exec footclient --app-id=brenbots $tmux attach -t brenbots

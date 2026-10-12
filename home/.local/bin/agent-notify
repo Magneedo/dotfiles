@@ -1,9 +1,10 @@
 #!/bin/sh
 set -eu
 
-# Claude and Codex hook with the agent's name as $1: PermissionRequest
-# (Claude only: it fires when a dialog is shown, but Codex's fires before
-# automatic review), PreToolUse for Codex's question tools, and Stop. Shows
+# Claude, Codex and Muse hook with the agent's name as $1: PermissionRequest
+# (Claude and Muse: it fires when a dialog is shown, but Codex's fires before
+# automatic review), PreToolUse for Codex's question tools, Notification for
+# Muse's (6 s after the question shows, without its text), and Stop. Shows
 # "Agent: reason" and logs it, with a summary, to the Vault's notification
 # history (bar-panel history shows it). An agent may end a reply with
 # "Notify: summary" or "Notify: high|medium|approval|review | summary" to set
@@ -29,6 +30,10 @@ jq -r --arg agent "$1" '
         end
     elif .hook_event_name == "PreToolUse" then
         if (.tool_name | test("^request_user_input(_async)?$")) then question
+        else empty end
+    elif .hook_event_name == "Notification" then
+        if .notification_type == "question_prompt" then
+            ["", "normal", "Has a question", $dir, (.message // "" | oneline)]
         else empty end
     elif .hook_event_name != "Stop" then
         empty
@@ -60,7 +65,7 @@ jq -r --arg agent "$1" '
     display=${WAYLAND_DISPLAY-}
     visible=$(cat "${XDG_RUNTIME_DIR:-/tmp}/dwl-visible-${display##*/}" 2>/dev/null) || visible=
     case " $visible " in
-    *" codexclaude "*)
+    *" brenbots "*)
         # Claude's daemon drops TMUX and TMUX_PANE from background jobs, so
         # take them from the nearest ancestor that has them.
         p=$PPID
@@ -73,7 +78,7 @@ jq -r --arg agent "$1" '
         export TMUX TMUX_PANE
         # Alt+Tab can hide this agent inside an otherwise visible popup.
         if [ -z "${TMUX-}" ] || [ -z "${TMUX_PANE-}" ] ||
-            ! tmux list-clients -t codexclaude -F '#{pane_id}' 2>/dev/null |
+            ! tmux list-clients -t brenbots -F '#{pane_id}' 2>/dev/null |
                 grep -Fxq -- "${TMUX_PANE-}"; then
             visible=
         fi

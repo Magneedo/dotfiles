@@ -33,7 +33,7 @@ python3 tests/power-profile.py
 install -Dm0755 home/.local/bin/tofi-power-profile ~/.local/bin/tofi-power-profile
 doas ./scripts/install-power-profile
 
-cd ~/Projects/dwl
+cd ~/Projects/brendwl
 make
 doas make install
 ```

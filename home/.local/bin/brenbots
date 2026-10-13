@@ -35,8 +35,9 @@ fi
 run codex sh -c 'until codex --no-alt-screen; do sleep 5; done'
 # Claude's default fullscreen renderer takes the mouse wheel; the classic one
 # leaves scrolling to tmux's copy mode (with its position indicator), as Codex
-# does with --no-alt-screen.
-run claude env CLAUDE_CODE_NO_FLICKER=0 claude
+# does with --no-alt-screen. Background sessions are always fullscreen, so
+# agent view, which runs them, is off too.
+run claude env CLAUDE_CODE_NO_FLICKER=0 CLAUDE_CODE_DISABLE_AGENT_VIEW=1 claude
 # Muse Code is installed separately, into the Vault (brenOS docs/secrets.md).
 # Contributor mode would let Meta train on this Vault; the network is open, as
 # in Codex's sandbox.

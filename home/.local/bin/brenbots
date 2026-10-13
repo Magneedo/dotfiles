@@ -49,17 +49,22 @@ muse=$HOME/Vault/Agents/.muse/bin/muse
 # colours when the popup opens and on Alt+Tab, in a floating pane that takes
 # no focus or keys and closes after 0.75 s (a message at the top would shift
 # the pane down a row). Its border is drawn as blank cells, so it shows as a
-# one-row box. Copy mode shows the scroll position at the top right, in the
-# same colours. Apply on every start, including when the agents are already
-# running.
-flash='run -b -C "new-pane -d -x #{e|+:#{n:window_name},2} -y 1 -X 0 -Y 0 '\
-'-s fg=##eeeeee,bg=##005577 \"printf \\\" #W \\\"; sleep .75\""'
+# one-row box with a gap to its right and below. Copy mode shows the scroll
+# position at the top right in the same colours, with a gap to its left. Both
+# boxes are 13 cells, which fits 50000/50000 (the history limit), with the
+# text centred: right-aligned to (13 + its length) / 2 cells, then padded to
+# 13. Apply on every start, including when the agents are already running.
+flash='run -b -C "new-pane -d -x 13 -y 1 -X 0 -Y 0 '\
+'-s fg=##eeeeee,bg=##005577 \"printf \\\"%*s\\\" '\
+'#{e|/:#{e|+:13,#{n:window_name}},2} #W; sleep .75\""'
+pos='#[align=right]#[bg=terminal] #[default]'\
+'#{p13:#{p-#{e|/:#{e|+:13,#{n:#{copy_position}/#{copy_position_limit}}},2}:'\
+'#{copy_position}/#{copy_position_limit}}}'
 $tmux set -g status off \; \
     set -gw pane-border-lines spaces \; \
     set-hook -g client-attached "$flash" \; \
     set-hook -g session-window-changed "$flash" \; \
     set -gw mode-style 'fg=#eeeeee,bg=#005577' \; \
-    set -gw copy-mode-position-format \
-        '#[align=right] #{copy_position}/#{copy_position_limit} '
+    set -gw copy-mode-position-format "$pos"
 
 [ "${1-}" = start ] || exec footclient --app-id=brenbots $tmux attach -t brenbots

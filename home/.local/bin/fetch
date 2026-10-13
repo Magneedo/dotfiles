@@ -17,9 +17,9 @@ if command -v tput >/dev/null 2>&1; then
 	bold="$(tput bold 2> /dev/null)"
 	reset="$(tput sgr0 2> /dev/null)"
 fi
-# dwl/dwlb colours: #005577 blue and #bbbbbb text, only where they can be reset.
+# Directory blue (ANSI 4) and #bbbbbb info, only where they can be reset.
 if [ -n "$reset" ]; then
-	blue="$(printf '\033[38;2;0;85;119m')"
+	blue="$(tput setaf 4 2> /dev/null)"
 	grey="$(printf '\033[38;2;187;187;187m')"
 fi
 lc="${reset}${bold}${blue}"         # labels

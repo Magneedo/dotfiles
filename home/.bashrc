@@ -2,7 +2,7 @@
 
 PROMPT_DIRTRIM=0
 PROMPT_COMMAND='history -a'
-PS1='\[\e[38;2;0;85;119m\][\w]\[\e[0m\] '
+PS1='\[\e[34m\][\w]\[\e[0m\] '
 
 if [[ ${SHLVL:-1} -eq 1 && -z ${NO_FETCH:-} ]] && command -v fetch >/dev/null 2>&1; then
 	fetch

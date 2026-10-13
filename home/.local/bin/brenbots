@@ -1,9 +1,10 @@
 #!/bin/sh
 set -eu
 
-# Codex, Claude and Muse run in their own tmux server, started by
-# dwl-autostart. Mod+c opens the popup or closes it if it is already open,
-# Alt+Tab cycles through the agents, and closing the popup never stops any.
+# Codex, Claude and Muse run in their own tmux server, started by the first
+# Mod+c. Mod+c opens the popup or hides it if it is already open, leaving the
+# agents running, and Alt+Tab cycles through them. Closing the popup (Mod+q)
+# stops them all.
 tmux="tmux -L brenbots"
 
 # Start an agent in window $1 unless it is already running (it may have
@@ -26,7 +27,7 @@ run() {
     fi
 }
 
-if [ -z "${1-}" ] && [ -n "$($tmux list-clients 2>/dev/null)" ]; then
+if [ -n "$($tmux list-clients 2>/dev/null)" ]; then
     exec $tmux detach-client -s brenbots
 fi
 
@@ -67,4 +68,7 @@ $tmux set -g status off \; \
     set -gw mode-style 'fg=#eeeeee,bg=#005577' \; \
     set -gw copy-mode-position-format "$pos"
 
-[ "${1-}" = start ] || exec footclient --app-id=brenbots $tmux attach -t brenbots
+# Hiding detaches the client, which exits 0. Closing the window hangs it up,
+# so it exits 1 and the shell, which ignores the hangup, stops the server.
+exec footclient --app-id=brenbots \
+    sh -c "trap '' HUP; $tmux attach -t brenbots || $tmux kill-server"

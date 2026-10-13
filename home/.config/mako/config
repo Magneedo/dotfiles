@@ -1,4 +1,6 @@
 anchor=bottom-right
+background-color=#005577
+text-color=#eeeeee
 outer-margin=0,0,10,0
 # Every card is 42 characters of this font wide (9 px each, plus padding and
 # border): a history title line with its time, or the calendar's 7 columns.

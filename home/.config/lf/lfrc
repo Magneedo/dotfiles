@@ -6,6 +6,8 @@ set showbinds true
 set hidden false
 set info size:time
 set dircounts false
+# Cursor in dwlb's selected-tag colours: #eeeeee on #005577.
+set cursoractivefmt "\033[38;2;238;238;238;48;2;0;85;119m"
 
 set promptfmt "h/l parent/open  j/k move  gg/G ends  /? search  n/N repeat  space/V select  y/d/p copy/cut/paste  r rename  . hidden  DEL trash  D delete  e edit  : cmd  q quit  F2 keys %S%w"
 

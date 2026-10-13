@@ -1,12 +1,14 @@
 anchor=bottom-right
 background-color=#005577
 text-color=#eeeeee
+border-color=#005577
+progress-color=over #444444
 outer-margin=0,0,10,0
-# Every card is 42 characters of this font wide (9 px each, plus padding and
+# Every card is 42 characters of this font wide (11 px each, plus padding and
 # border): a history title line with its time, or the calendar's 7 columns.
 # Heights grow with the content.
-font=Noto Sans Mono 11
-width=392
+font=Noto Sans Mono 14
+width=476
 height=1100
 
 [urgency=low]
@@ -24,103 +26,103 @@ default-timeout=20000
 on-button-left=dismiss
 
 # Agent pop-ups (agent-notify) are a one-line title: size each card to it,
-# 9 px per character plus the 5 px padding and 2 px border on each side.
+# 11 px per character plus the 5 px padding and 2 px border on each side.
 
 [app-name=agent summary~="^.{10}$"]
-width=104
+width=124
 
 [app-name=agent summary~="^.{11}$"]
-width=113
+width=135
 
 [app-name=agent summary~="^.{12}$"]
-width=122
+width=146
 
 [app-name=agent summary~="^.{13}$"]
-width=131
+width=157
 
 [app-name=agent summary~="^.{14}$"]
-width=140
+width=168
 
 [app-name=agent summary~="^.{15}$"]
-width=149
+width=179
 
 [app-name=agent summary~="^.{16}$"]
-width=158
+width=190
 
 [app-name=agent summary~="^.{17}$"]
-width=167
+width=201
 
 [app-name=agent summary~="^.{18}$"]
-width=176
-
-[app-name=agent summary~="^.{19}$"]
-width=185
-
-[app-name=agent summary~="^.{20}$"]
-width=194
-
-[app-name=agent summary~="^.{21}$"]
-width=203
-
-[app-name=agent summary~="^.{22}$"]
 width=212
 
+[app-name=agent summary~="^.{19}$"]
+width=223
+
+[app-name=agent summary~="^.{20}$"]
+width=234
+
+[app-name=agent summary~="^.{21}$"]
+width=245
+
+[app-name=agent summary~="^.{22}$"]
+width=256
+
 [app-name=agent summary~="^.{23}$"]
-width=221
+width=267
 
 [app-name=agent summary~="^.{24}$"]
-width=230
+width=278
 
 [app-name=agent summary~="^.{25}$"]
-width=239
+width=289
 
 [app-name=agent summary~="^.{26}$"]
-width=248
+width=300
 
 [app-name=agent summary~="^.{27}$"]
-width=257
-
-[app-name=agent summary~="^.{28}$"]
-width=266
-
-[app-name=agent summary~="^.{29}$"]
-width=275
-
-[app-name=agent summary~="^.{30}$"]
-width=284
-
-[app-name=agent summary~="^.{31}$"]
-width=293
-
-[app-name=agent summary~="^.{32}$"]
-width=302
-
-[app-name=agent summary~="^.{33}$"]
 width=311
 
+[app-name=agent summary~="^.{28}$"]
+width=322
+
+[app-name=agent summary~="^.{29}$"]
+width=333
+
+[app-name=agent summary~="^.{30}$"]
+width=344
+
+[app-name=agent summary~="^.{31}$"]
+width=355
+
+[app-name=agent summary~="^.{32}$"]
+width=366
+
+[app-name=agent summary~="^.{33}$"]
+width=377
+
 [app-name=agent summary~="^.{34}$"]
-width=320
+width=388
 
 [app-name=agent summary~="^.{35}$"]
-width=329
+width=399
 
 [app-name=agent summary~="^.{36}$"]
-width=338
+width=410
 
 [app-name=agent summary~="^.{37}$"]
-width=347
+width=421
 
 [app-name=agent summary~="^.{38}$"]
-width=356
+width=432
 
 [app-name=agent summary~="^.{39}$"]
-width=365
+width=443
 
 [app-name=agent summary~="^.{40}$"]
-width=374
+width=454
 
 [app-name=agent summary~="^.{41}$"]
-width=383
+width=465
 
 [app-name=agent summary~="^.{42}$"]
-width=392
+width=476

@@ -26,7 +26,7 @@ viewer="vncviewer $dir/vnc"
 vnc() {
     rm -f "$dir/vnc" "$dir/ctl"
     # -r draws the desk's cursor into the picture; the viewer has none.
-    wayvnc -r -u -S "$dir/ctl" "$dir/vnc" >>"$dir/log" 2>&1 &
+    setsid -f wayvnc -r -u -S "$dir/ctl" "$dir/vnc" >>"$dir/log" 2>&1
 }
 
 case "${1-}" in
@@ -46,10 +46,11 @@ start)
                 min_by(.[0] * .[1]) | "\(.[0] - 6)x\(.[1] - 33)"')
             # The desk's socket goes in $dir, which Codex's sandbox may reach.
             # Its arrow is the agent emblem (other cursors are Adwaita's).
+            # setsid: Codex kills a command's process group when it ends.
             XDG_RUNTIME_DIR="$dir" WLR_BACKENDS=headless \
                 XCURSOR_PATH="$HOME/.local/share/agentdesk/icons:/usr/share/icons" \
-                dwl -s "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' size=$size '$0' init" \
-                >"$dir/log" 2>&1 &
+                setsid -f dwl -s "XDG_RUNTIME_DIR='$XDG_RUNTIME_DIR' size=$size '$0' init" \
+                >"$dir/log" 2>&1
         fi
         if ! timeout 10 wayvncctl -w -S "$dir/ctl" version >/dev/null 2>&1; then
             echo "agentdesk: the desk did not start, see $dir/log" >&2

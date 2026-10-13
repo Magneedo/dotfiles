@@ -37,9 +37,11 @@ run codex sh -c 'until codex --no-alt-screen; do sleep 5; done'
 # leaves scrolling to tmux's copy mode (with its position indicator), as Codex
 # does with --no-alt-screen.
 run claude env CLAUDE_CODE_NO_FLICKER=0 claude
-# Muse Code is installed separately (brenOS docs/secrets.md). Contributor mode
-# would let Meta train on this Vault; the network is open, as in Codex's sandbox.
-command -v muse >/dev/null &&
-    run muse muse --contributor-mode off --sandbox-network enabled
+# Muse Code is installed separately, into the Vault (brenOS docs/secrets.md).
+# Contributor mode would let Meta train on this Vault; the network is open, as
+# in Codex's sandbox.
+muse=$HOME/Vault/Agents/.muse/bin/muse
+[ -x "$muse" ] &&
+    run muse "$muse" --contributor-mode off --sandbox-network enabled
 
 [ "${1-}" = start ] || exec footclient --app-id=brenbots $tmux attach -t brenbots

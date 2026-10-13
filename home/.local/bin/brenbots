@@ -18,7 +18,7 @@ run() {
         # Without mouse mode, foot turns the wheel into arrow keys: prompt
         # history. No prefix key, so Ctrl+B still reaches Claude. The popup's
         # title, shown in the bar, names the agent on screen.
-        $tmux set -g status off \; set -g mouse on \; \
+        $tmux set -g mouse on \; \
             set -g history-limit 50000 \; set -g prefix None \; \
             set -g set-titles on \; set -g set-titles-string '#W' \; \
             bind -n M-Tab next-window \; \
@@ -43,5 +43,14 @@ run claude env CLAUDE_CODE_NO_FLICKER=0 claude
 muse=$HOME/Vault/Agents/.muse/bin/muse
 [ -x "$muse" ] &&
     run muse "$muse" --contributor-mode off --sandbox-network enabled
+
+# Match dwl/dwlb: only the bot name has a coloured background.
+# Apply on every start, including when the agents are already running.
+$tmux set -g status on \; set -g status-position top \; \
+    set -g status-style 'bg=default,fg=default' \; \
+    set -g status-format[0] '#[fg=#eeeeee,bg=#005577] #W #[default]#[align=right]#{?#{==:#{pane_mode},copy-mode},#[fg=#eeeeee#,bg=#005577] [#{copy_position}/#{copy_position_limit}] ,}' \; \
+    set -gw mode-style 'fg=#eeeeee,bg=#005577' \; \
+    set -gw copy-mode-position-format '' \; \
+    set-hook -g after-send-keys 'if -F "#{==:#{pane_mode},copy-mode}" "refresh-client -S"'
 
 [ "${1-}" = start ] || exec footclient --app-id=brenbots $tmux attach -t brenbots

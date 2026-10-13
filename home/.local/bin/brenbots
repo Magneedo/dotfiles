@@ -1,10 +1,11 @@
 #!/bin/sh
 set -eu
 
-# Codex, Claude and Muse run in their own tmux server, started by the first
+# Claude, Codex and Muse run in their own tmux server, started by the first
 # Mod+c. Mod+c opens the popup or hides it if it is already open, leaving the
-# agents running, and Alt+Tab cycles through them. Closing the popup (Mod+q)
-# stops them all.
+# agents running. Alt+Tab cycles through them, and Alt+1, Alt+2 and Alt+3 show
+# Claude, Codex and Muse, starting it if needed; Muse starts only that way.
+# Closing the popup (Mod+q) stops them all.
 tmux="tmux -L brenbots"
 
 # Start an agent in window $1 unless it is already running (it may have
@@ -31,20 +32,20 @@ if [ -n "$($tmux list-clients 2>/dev/null)" ]; then
     exec $tmux detach-client -s brenbots
 fi
 
-# Codex exits if it can't reach its servers at start (no network yet at
-# login), so retry until it starts; /quit exits 0 and ends the loop.
-run codex sh -c 'until codex --no-alt-screen; do sleep 5; done'
 # Claude's default fullscreen renderer takes the mouse wheel; the classic one
 # leaves scrolling to tmux's copy mode (with its position indicator), as Codex
 # does with --no-alt-screen. Background sessions are always fullscreen, so
 # agent view, which runs them, is off too.
-run claude env CLAUDE_CODE_NO_FLICKER=0 CLAUDE_CODE_DISABLE_AGENT_VIEW=1 claude
+claude='env CLAUDE_CODE_NO_FLICKER=0 CLAUDE_CODE_DISABLE_AGENT_VIEW=1 claude'
+# Codex exits if it can't reach its servers at start (no network yet at
+# login), so retry until it starts; /quit exits 0 and ends the loop.
+codex="sh -c 'until codex --no-alt-screen; do sleep 5; done'"
 # Muse Code is installed separately, into the Vault (brenOS docs/secrets.md).
 # Contributor mode would let Meta train on this Vault; the network is open, as
 # in Codex's sandbox.
-muse=$HOME/Vault/Agents/.muse/bin/muse
-[ -x "$muse" ] &&
-    run muse "$muse" --contributor-mode off --sandbox-network enabled
+muse="$HOME/Vault/Agents/.muse/bin/muse --contributor-mode off --sandbox-network enabled"
+run claude "$claude"
+run codex "$codex"
 
 # No status line: the bot's name flashes at the top left in dwl/dwlb's
 # colours when the popup opens and on Alt+Tab, in a floating pane that takes
@@ -61,7 +62,11 @@ flash='run -b -C "new-pane -d -x 13 -y 1 -X 0 -Y 0 '\
 pos='#[align=right]#[bg=terminal] #[default]'\
 '#{p13:#{p-#{e|/:#{e|+:13,#{n:#{copy_position}/#{copy_position_limit}}},2}:'\
 '#{copy_position}/#{copy_position_limit}}}'
-$tmux set -g status off \; \
+dir=$HOME/Vault/Agents
+$tmux bind -n M-1 new-window -S -n claude -c "$dir" "$claude" \; \
+    bind -n M-2 new-window -S -n codex -c "$dir" "$codex" \; \
+    bind -n M-3 new-window -S -n muse -c "$dir" "$muse" \; \
+    set -g status off \; \
     set -gw pane-border-lines spaces \; \
     set-hook -g client-attached "$flash" \; \
     set-hook -g session-window-changed "$flash" \; \

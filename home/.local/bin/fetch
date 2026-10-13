@@ -11,24 +11,29 @@ fi
 
 bold=''
 blue=''
+grey=''
 reset=''
 if command -v tput >/dev/null 2>&1; then
 	bold="$(tput bold 2> /dev/null)"
-	blue="$(tput setaf 4 2> /dev/null)"
 	reset="$(tput sgr0 2> /dev/null)"
+fi
+# dwl/dwlb colours: #005577 blue and #bbbbbb text, only where they can be reset.
+if [ -n "$reset" ]; then
+	blue="$(printf '\033[38;2;0;85;119m')"
+	grey="$(printf '\033[38;2;187;187;187m')"
 fi
 lc="${reset}${bold}${blue}"         # labels
 nc="${reset}${bold}${blue}"         # user and hostname
-ic="${reset}"                       # info
+ic="${reset}${grey}"                # info
 c0="${reset}${blue}"                # first color
 cat <<EOF
 
-${c0}        /\\       ${nc}${USER}${ic}@${nc}${host}${reset}
+${c0}        /\\       ${nc}${USER}@${host}${reset}
 ${c0}       /  \\      ${lc}OS:${ic}${os}${reset}
 ${c0}      /\`'.,\\     ${lc}KERNEL:${ic}${kernel}${reset}
 ${c0}     /     ',    ${lc}UPTIME:${ic}${uptime}${reset}
 ${c0}    /      ,\`\\   ${lc}PACKAGES:${ic}${packages}${reset}
 ${c0}   /   ,.'\`.  \\  ${lc}WM:${ic}dwl${reset}
-${c0}  /.,'\`     \`'.\\
+${c0}  /.,'\`     \`'.\\${reset}
 
 EOF

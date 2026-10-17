@@ -1,0 +1,87 @@
+#!/bin/sh
+set -eu
+
+# One-time setup for backupexternal: installs restic, erases the given USB disk
+# and formats it as brenbackup, creates the repository and its password, and
+# installs backup and backupexternal. Run from the dotfiles repository:
+#   doas ./scripts/install-usb-backup /dev/sdX
+
+PATH=/usr/bin:/bin
+export PATH
+umask 077
+cd -- "$(dirname -- "$0")/.."
+
+[ "$#" -eq 1 ] || { echo 'usage: install-usb-backup /dev/sdX' >&2; exit 1; }
+[ "$(id -u)" -eq 0 ] || { echo 'Run with doas.' >&2; exit 1; }
+# Work on the drive's by-id name (model and serial), which no other disk can
+# take over, and check it is still the same attachment before erasing.
+[ "$(lsblk -dnro TYPE,TRAN "$1")" = 'disk usb' ] ||
+    { echo "$1 is not a whole USB disk." >&2; exit 1; }
+disk=$(find /dev/disk/by-id -name 'usb-*' ! -name '*-part*' |
+    while IFS= read -r l; do if [ "$l" -ef "$1" ]; then echo "$l"; fi; done)
+[ -n "$disk" ] && [ "$(printf '%s\n' "$disk" | wc -l)" -eq 1 ] ||
+    { echo "No unique by-id name for $1." >&2; exit 1; }
+# The kernel's number for this attachment; it changes if the drive is replugged.
+diskseq() {
+    props=$(udevadm info -q property "$1") || return 1
+    n=$(printf '%s\n' "$props" | sed -n 's/^DISKSEQ=//p')
+    case $n in '' | *[!0-9]*) return 1 ;; esac
+    echo "$n"
+}
+seq=$(diskseq "$disk") || { echo "No DISKSEQ for $disk." >&2; exit 1; }
+[ ! -e /dev/disk/by-label/brenbackup ] ||
+    { echo 'A brenbackup drive already exists.' >&2; exit 1; }
+
+pacman -S --needed restic
+
+lsblk -o NAME,SIZE,MODEL,SERIAL,FSTYPE,LABEL,MOUNTPOINTS "$disk"
+wipefs -n "$disk"
+printf 'Erase everything on %s? Type yes: ' "$disk"
+read -r answer
+[ "$answer" = yes ] || { echo 'Nothing changed.'; exit 0; }
+[ "$(diskseq "$disk" || :)" = "$seq" ] ||
+    { echo 'The drive was unplugged or replaced; nothing changed.' >&2; exit 1; }
+# Nothing on it may be mounted or held open by another device (crypt, LVM).
+use=$(lsblk -nro TYPE,MOUNTPOINTS "$disk") ||
+    { echo 'Could not check the drive; nothing changed.' >&2; exit 1; }
+[ -z "$(printf '%s\n' "$use" | awk '($1 != "disk" && $1 != "part") || $2 != ""')" ] ||
+    { echo 'The drive is in use; nothing changed.' >&2; exit 1; }
+wipefs -a "$disk"
+printf 'label: gpt\ntype=linux\n' | sfdisk -q "$disk"
+udevadm settle
+part=$disk-part1
+[ -b "$part" ] && [ "$(diskseq "$part" || :)" = "$seq" ] ||
+    { echo "$part did not appear on the same drive." >&2; exit 1; }
+mnt=$(mktemp -d)
+# From here on a failure leaves a formatted but unfinished drive: unmount it
+# and say how to start over.
+cleanup() {
+    rc=$?
+    if mountpoint -q "$mnt"; then
+        umount "$mnt" || { echo "Could not unmount $mnt." >&2; rc=1; }
+    fi
+    rmdir "$mnt" 2>/dev/null || :
+    [ "$rc" -eq 0 ] ||
+        echo "Setup failed. To start over: doas wipefs -a $part $disk" >&2
+    exit "$rc"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+mkfs.ext4 -q -L brenbackup "$part"
+udevadm settle
+
+install -dm0700 /etc/usb-backup
+[ -s /etc/usb-backup/password ] ||
+    head -c 32 /dev/urandom | base64 >/etc/usb-backup/password
+mount "$part" "$mnt"
+RESTIC_PASSWORD_FILE=/etc/usb-backup/password restic init -r "$mnt/restic"
+umount "$mnt"
+
+for f in backup backupexternal; do
+    install -Dm0755 "usr/local/sbin/$f" "/usr/local/sbin/$f"
+done
+
+echo
+echo 'Save this repository password in Bitwarden; restoring without the laptop needs it:'
+cat /etc/usb-backup/password
+echo 'Run backupexternal to make the first backup.'

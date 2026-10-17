@@ -7,6 +7,9 @@ set -eu
 # Claude, Codex and Muse, starting it if needed; Muse starts only that way.
 # Closing the popup (Mod+q) stops them all.
 tmux="tmux -L brenbots"
+# As in dwl-session, so agents started over SSH keep their state here too.
+export CLAUDE_CONFIG_DIR="$HOME/Vault/Agents/.claude"
+export CODEX_HOME="$HOME/Vault/Agents/.codex"
 
 # Start an agent in window $1 unless it is already running (it may have
 # exited).
@@ -28,7 +31,8 @@ run() {
     fi
 }
 
-if [ -n "$($tmux list-clients 2>/dev/null)" ]; then
+if [ -n "${WAYLAND_DISPLAY-}" ] &&
+    [ -n "$($tmux list-clients -t brenbots 2>/dev/null)" ]; then
     exec $tmux detach-client -s brenbots
 fi
 
@@ -72,6 +76,10 @@ $tmux bind -n M-1 new-window -S -n claude -c "$dir" "$claude" \; \
     set-hook -g session-window-changed "$flash" \; \
     set -gw mode-style 'fg=#eeeeee,bg=#005577' \; \
     set -gw copy-mode-position-format "$pos"
+
+# Over SSH (from the phone) there is no popup: attach a session of its own
+# that shares the agents' windows, so Mod+c on the laptop never detaches it.
+[ -n "${WAYLAND_DISPLAY-}" ] || exec $tmux new-session -A -s phone -t brenbots
 
 # Hiding detaches the client, which exits 0. Closing the window hangs it up,
 # so it exits 1 and the shell, which ignores the hangup, stops the server.

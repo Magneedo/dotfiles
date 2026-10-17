@@ -55,18 +55,21 @@ run codex "$codex"
 # colours when the popup opens and on Alt+Tab, in a floating pane that takes
 # no focus or keys and closes after 0.75 s (a message at the top would shift
 # the pane down a row). Its border is drawn as blank cells, so it shows as a
-# one-row box with a gap to its right and below (the size includes the border,
-# which starts off screen above and to the left). Copy mode shows the scroll
-# position at the top right in the same colours, with a gap to its left. Both
-# boxes are 13 cells, which fits 50000/50000 (the history limit), with the
-# text centred: right-aligned to (13 + its length) / 2 cells, then padded to
-# 13. Apply on every start, including when the agents are already running.
-flash='run -b -C "new-pane -d -x 15 -y 3 -X -1 -Y -1 '\
+# one-row box with a gap to its left, right and below (the size includes the
+# border, whose top row is off screen). Copy mode shows the scroll position at
+# the top right in the same colours, with a gap to its left and right. The
+# outer gaps keep both boxes one cell from the popup's sides: foot leaves the
+# width's remainder after its last whole cell on the right, which showed as a
+# thin dark line between the count and the blue border. Both boxes are 13
+# cells, which fits 50000/50000 (the history limit), with the text centred:
+# right-aligned to (13 + its length) / 2 cells, then padded to 13. Apply on
+# every start, including when the agents are already running.
+flash='run -b -C "new-pane -d -x 15 -y 3 -X 0 -Y -1 '\
 '-s fg=##eeeeee,bg=##005577 \"printf \\\"%*s\\\" '\
 '#{e|/:#{e|+:13,#{n:window_name}},2} #W; sleep .75\""'
 pos='#[align=right]#[bg=terminal] #[default]'\
 '#{p13:#{p-#{e|/:#{e|+:13,#{n:#{copy_position}/#{copy_position_limit}}},2}:'\
-'#{copy_position}/#{copy_position_limit}}}'
+'#{copy_position}/#{copy_position_limit}}}#[bg=terminal] '
 dir=$HOME/Vault/Agents
 $tmux bind -n M-1 new-window -S -n claude -c "$dir" "$claude" \; \
     bind -n M-2 new-window -S -n codex -c "$dir" "$codex" \; \

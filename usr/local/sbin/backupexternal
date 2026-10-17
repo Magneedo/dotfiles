@@ -1,0 +1,50 @@
+#!/bin/sh
+set -eu
+
+# Back up to the USB drive labelled brenbackup (a restic repository) now.
+# Set the drive up once with scripts/install-usb-backup.
+[ "$(id -u)" -eq 0 ] || exec doas "$0" "$@"
+
+PATH=/usr/bin:/bin
+LC_ALL=C
+export PATH LC_ALL
+umask 077
+
+dev=/dev/disk/by-label/brenbackup
+mnt=/run/backupexternal
+snap=/.snapshots/backupexternal
+
+[ -e "$dev" ] || { echo 'Plug in the brenbackup drive first.' >&2; exit 1; }
+exec 9>/run/backupexternal.lock
+flock -n 9 || { echo 'A backup is already running.' >&2; exit 1; }
+
+# Unmount and drop the snapshot on any exit, and first clear what an
+# interrupted run left behind.
+cleanup() {
+    if mountpoint -q "$mnt"; then umount "$mnt"; fi
+    rmdir "$mnt" 2>/dev/null || :
+    if [ -d "$snap" ]; then btrfs subvolume delete "$snap" >/dev/null; fi
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+cleanup
+mkdir "$mnt"
+mount -o noatime,nosuid,nodev,noexec "$dev" "$mnt"
+
+export RESTIC_REPOSITORY="$mnt/restic" RESTIC_PASSWORD_FILE=/etc/usb-backup/password
+export RESTIC_CACHE_DIR=/var/cache/restic
+restic unlock
+# Back up a read-only snapshot, so everything (a running VM's disk too) is
+# copied as it was at one moment. Its directories are bound over the real
+# paths in a private mount namespace, so the backup records the real paths.
+btrfs subvolume snapshot -r / "$snap" >/dev/null
+unshare -m sh -ec '
+    for p in /home/bren /etc /usr/local /root; do mount --bind "$1$p" "$p"; done
+    exec restic backup --one-file-system --exclude-caches \
+        --exclude=/home/bren/.cache --exclude=/home/bren/.local/share/Steam \
+        /home/bren /etc /usr/local /root' sh "$snap"
+restic forget --prune --keep-daily 7 --keep-weekly 4 --keep-monthly 12
+# Reads a random 5% of the stored data each run, so corruption shows up over time.
+restic check --read-data-subset=5%
+cleanup
+echo 'Backup done; you can unplug the drive.'

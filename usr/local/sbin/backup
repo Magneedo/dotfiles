@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+# Take a read-only snapshot of / (home included) in /.snapshots/manual, named
+# like the weekly ones. Delete old ones with `doas btrfs subvolume delete`.
+[ "$(id -u)" -eq 0 ] || exec doas "$0" "$@"
+
+PATH=/usr/bin:/bin
+export PATH
+
+[ "$(findmnt -nro FSROOT -M /.snapshots)" = /@snapshots ] ||
+    { echo '/.snapshots must mount @snapshots.' >&2; exit 1; }
+mkdir -p /.snapshots/manual
+name=/.snapshots/manual/$(date -u +%Y-%m-%dT%H:%M:%SZ)
+btrfs subvolume snapshot -r / "$name" >/dev/null
+echo "Saved $name"

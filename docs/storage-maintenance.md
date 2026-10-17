@@ -120,3 +120,40 @@ snapshot's `boot/` contents to the EFI partition. Keep the existing `@snapshots`
 and swap partition. Because home belongs to `@`, whole-root rollback also rolls
 back home; protect newer personal files first. Do not switch the active root
 from the running desktop or assume a root-only rollback restores `/boot`.
+
+## Backups
+
+Besides the automatic weekly snapshots, two commands (they ask for the doas
+password):
+
+- `backup` takes a read-only snapshot of `/` (home included) in
+  `/.snapshots/manual`, named by UTC time. It stays on this disk; delete old
+  ones with `doas btrfs subvolume delete /.snapshots/manual/NAME`.
+- `backupexternal` backs up to the USB drive labelled `brenbackup`, which must
+  be plugged in. It uses restic, encrypted with `/etc/usb-backup/password`
+  (also in Bitwarden), and saves `/home/bren` (without `.cache`, Steam and
+  anything with a `CACHEDIR.TAG`), `/etc`, `/usr/local` and `/root`, read from a
+  temporary read-only snapshot so everything, a running VM's disk included, is
+  copied as it was at one moment. It keeps 7 daily, 4 weekly and 12 monthly
+  backups, then checks the repository and reads back a random 5% of its data.
+  Unplug the drive when it says it's done.
+
+Set the drive up once with `doas ./scripts/install-usb-backup /dev/sdX`, which
+erases that disk and installs both commands.
+
+To look at or restore files from the drive, plug it in and open a root shell
+that holds `backupexternal`'s lock, so no backup runs meanwhile:
+
+```sh
+doas flock /run/backupexternal.lock sh
+mount /dev/disk/by-label/brenbackup /mnt
+export RESTIC_REPOSITORY=/mnt/restic RESTIC_PASSWORD_FILE=/etc/usb-backup/password
+restic snapshots
+restic restore latest --target /home/bren/restore --include /home/bren/Vault
+umount /mnt
+exit
+```
+
+That restores into `/home/bren/restore/home/bren/Vault`. Without the laptop,
+install restic anywhere, mount the drive and give the password from Bitwarden
+when restic asks.

@@ -5,7 +5,7 @@ set -eu
 # and clipboard, so agents never touch the user's. "agentdesk start" starts
 # it when needed and shows it in a viewer on tag 10 (Mod+0), where the user
 # can watch and take over; "agentdesk stop" ends it. "agentdesk CMD..." runs
-# CMD on the desk, e.g. agentdesk grim shot.png.
+# CMD on the desk, e.g. agentdesk grim shot.png. X11 apps go there too.
 dir="$XDG_RUNTIME_DIR/agentdesk"
 
 case "${1-}" in
@@ -76,14 +76,18 @@ stop)
         fi
     fi
     pkill -u "$(id -u)" -fx "$viewer" || true
-    rm -f "$dir/pid" "$dir/vnc" "$dir/ctl"
+    rm -f "$dir/pid" "$dir/vnc" "$dir/ctl" "$dir/display"
     ;;
 init)
     wlr-randr --output HEADLESS-1 --custom-mode "$size"
+    # The desk's Xwayland, for X11 apps run through "agentdesk CMD".
+    printf '%s\n' "${DISPLAY-}" >"$dir/display"
     vnc
     exec brave-origin --user-data-dir="$HOME/.local/share/agentdesk/brave"
     ;;
 *)
+    unset DISPLAY
+    [ -r "$dir/display" ] && read -r DISPLAY <"$dir/display" && export DISPLAY
     exec "$@"
     ;;
 esac

@@ -1,0 +1,6 @@
+[user]
+	email = 202487256+Magneedo@users.noreply.github.com
+	name = Magneedo
+[hook "no-ai-attribution"]
+	event = commit-msg
+	command = ~/.local/bin/no-ai-attribution

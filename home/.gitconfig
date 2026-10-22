@@ -1,0 +1,6 @@
+[user]
+	email = eddies_adverbs_2n@icloud.com
+	name = Magneedo
+[hook "no-ai-attribution"]
+	event = commit-msg
+	command = ~/.local/bin/no-ai-attribution

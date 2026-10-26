@@ -82,14 +82,16 @@ stop)
         fi
     fi
     pkill -u "$(id -u)" -fx "$viewer" || true
-    rm -f "$dir/pid" "$dir/vnc" "$dir/ctl" "$dir/display"
+    rm -f "$dir/pid" "$dir/vnc" "$dir/ctl" "$dir/display" "$dir/status"
     ;;
 init)
     wlr-randr --output HEADLESS-1 --custom-mode "$size"
     # The desk's Xwayland, for X11 apps run through "agentdesk CMD".
     printf '%s\n' "${DISPLAY-}" >"$dir/display"
     vnc
-    exec brave-origin --user-data-dir="$HOME/.local/share/agentdesk/brave"
+    brave-origin --user-data-dir="$HOME/.local/share/agentdesk/brave" &
+    # dwl writes its status (the focused window's title and appid) to stdin.
+    exec cat >"$dir/status"
     ;;
 *)
     unset DISPLAY

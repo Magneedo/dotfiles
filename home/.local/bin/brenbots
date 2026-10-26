@@ -1,11 +1,10 @@
 #!/bin/sh
 set -eu
 
-# Claude, Codex and Muse run in their own tmux server, started by the first
-# Mod+c. Mod+c opens the popup or hides it if it is already open, leaving the
-# agents running. Alt+Tab cycles through them, and Alt+1, Alt+2 and Alt+3 show
-# Claude, Codex and Muse, starting it if needed; Muse starts only that way.
-# Closing the popup (Mod+q) stops them all.
+# Claude and Codex run in their own tmux server, started by the first Mod+c.
+# Mod+c opens the popup or hides it if it is already open, leaving the agents
+# running. Alt+Tab cycles through them, and Alt+1 and Alt+2 show Claude and
+# Codex, starting it if needed. Closing the popup (Mod+q) stops them all.
 tmux="tmux -L brenbots"
 # As in dwl-session, so agents started over SSH keep their state here too.
 export CLAUDE_CONFIG_DIR="$HOME/Vault/Agents/.claude"
@@ -44,10 +43,6 @@ claude='env CLAUDE_CODE_NO_FLICKER=0 CLAUDE_CODE_DISABLE_AGENT_VIEW=1 claude'
 # Codex exits if it can't reach its servers at start (no network yet at
 # login), so retry until it starts; /quit exits 0 and ends the loop.
 codex="sh -c 'until codex --no-alt-screen; do sleep 5; done'"
-# Muse Code is installed separately, into the Vault (brenOS docs/secrets.md).
-# Contributor mode would let Meta train on this Vault; the network is open, as
-# in Codex's sandbox.
-muse="$HOME/Vault/Agents/.muse/bin/muse --contributor-mode off --sandbox-network enabled"
 run claude "$claude"
 run codex "$codex"
 
@@ -73,7 +68,6 @@ pos='#[align=right]#[bg=terminal] #[default]'\
 dir=$HOME/Vault/Agents
 $tmux bind -n M-1 new-window -S -n claude -c "$dir" "$claude" \; \
     bind -n M-2 new-window -S -n codex -c "$dir" "$codex" \; \
-    bind -n M-3 new-window -S -n muse -c "$dir" "$muse" \; \
     set -g status off \; \
     set -gw pane-border-lines spaces \; \
     set-hook -g client-attached "$flash" \; \

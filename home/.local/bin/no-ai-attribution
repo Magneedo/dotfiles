@@ -3,7 +3,7 @@
 # commit message that credits an AI, such as a "Co-Authored-By: Claude" trailer
 # or a "Generated with Claude Code" line. It also refuses a human co-author
 # whose name contains one of these words; edit such a trailer by hand.
-ai='claude|codex|anthropic|openai|chatgpt|copilot|gemini|muse'
+ai='claude|codex|anthropic|openai|chatgpt|copilot|gemini'
 if grep -qiE "^co-authored-by:.*($ai)|generated (with|by) .*($ai)" "$1"; then
     echo "no-ai-attribution: remove the AI credit from the commit message" >&2
     exit 1

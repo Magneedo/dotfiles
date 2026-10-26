@@ -14,6 +14,11 @@ dbus-update-activation-environment \
     XDG_RUNTIME_DIR \
     >/dev/null 2>&1 || true
 
+# The session's display and bus, for agents started over SSH (brenbots).
+session="$logdir/dwl-session-env"
+export -p | grep -E '^export (WAYLAND_DISPLAY|DISPLAY|DBUS_SESSION_BUS_ADDRESS)=' \
+    >"$session" || true
+
 command -v brightnessctl >/dev/null 2>&1 &&
     brightnessctl set 1% >/dev/null 2>&1 || true
 
@@ -67,7 +72,7 @@ swayidle -w timeout 600 'swaylock -f' before-sleep 'swaylock -f' >/dev/null 2>&1
 
 # Keep the compositor's visibility snapshot for notification hooks.
 (
-    trap 'rm -f "$visible" "$visible.tmp"' EXIT
+    trap 'rm -f "$visible" "$visible.tmp" "$session"' EXIT
     trap 'exit' HUP INT TERM
     while IFS= read -r line; do
         case "$line" in

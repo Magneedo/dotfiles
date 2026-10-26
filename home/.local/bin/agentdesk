@@ -21,6 +21,8 @@ unset AGENTDESK_LOCKED
 
 user_display="${WAYLAND_DISPLAY-}"
 export WAYLAND_DISPLAY="$dir/wayland-0"
+# Brave picks X11 without it (as over SSH), and wtype can't type into X11.
+export XDG_SESSION_TYPE=wayland
 viewer="vncviewer $dir/vnc"
 
 vnc() {
@@ -44,6 +46,10 @@ start)
                 [.[] | select(.enabled) | .scale as $s | .modes[] |
                  select(.current) | [.width / $s, .height / $s | floor]] |
                 min_by(.[0] * .[1]) | "\(.[0] - 6)x\(.[1] - 33)"')
+            if [ -z "$size" ]; then
+                echo "agentdesk: can't read the user's screen" >&2
+                exit 1
+            fi
             # The desk's socket goes in $dir, which Codex's sandbox may reach.
             # Its arrow is the agent emblem (other cursors are Adwaita's).
             # setsid: Codex kills a command's process group when it ends.

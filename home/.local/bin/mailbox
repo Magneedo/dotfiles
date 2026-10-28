@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+# The VPS mailbox over SSH, for agents and the user: no mail password on the
+# laptop and nothing running on the VPS. Reading and sorting use doveadm;
+# sending uses Postfix's sendmail, whose milter DKIM-signs it.
+#
+#   mailbox list [MAILBOX [QUERY...]]  one line per message (INBOX savedsince 3d)
+#   mailbox read UID [MAILBOX]         headers, attachment names and text
+#   mailbox reply UID [MAILBOX]        reply text on stdin, draft on stdout
+#   mailbox send                       draft on stdin: headers, blank line, text;
+#                                      sends it and saves a copy in Sent
+#   mailbox ARGS...                    any other doveadm command, e.g.
+#                                      mailbox move Trash mailbox INBOX uid 123
+import email
+import email.headerregistry
+import email.message
+import email.policy
+import email.utils
+import html.parser
+import re
+import shlex
+import subprocess
+import sys
+
+HOST = "brendynmarroquin.xyz"
+FROM = "bren <bren@brendynmarroquin.xyz>"
+
+
+def ssh(command, data=b""):
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", HOST, command],
+                       input=data, capture_output=True)
+    # doveadm run as a user can't reach Dovecot's stats socket; harmless.
+    for line in r.stderr.decode(errors="replace").splitlines():
+        if "stats-writer" not in line:
+            print(line, file=sys.stderr)
+    if r.returncode:
+        sys.exit(r.returncode)
+    return r.stdout
+
+
+def doveadm(*args):
+    return ssh("doveadm " + shlex.join(args))
+
+
+def fetch(uid, box):
+    raw = doveadm("fetch", "text", "mailbox", box, "uid", uid)
+    if not raw:
+        sys.exit(f"mailbox: no uid {uid} in {box}")
+    # doveadm prints "text:" before the message.
+    return email.message_from_bytes(raw.partition(b"\n")[2],
+                                    policy=email.policy.default)
+
+
+class HTMLText(html.parser.HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.out, self.hidden = [], 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("head", "script", "style"):
+            self.hidden += 1
+        elif tag in ("br", "p", "div", "tr", "li", "h1", "h2", "h3"):
+            self.out.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in ("head", "script", "style"):
+            self.hidden = max(0, self.hidden - 1)
+
+    def handle_data(self, data):
+        if not self.hidden:
+            self.out.append(data)
+
+
+def text(m):
+    part = m.get_body(("plain", "html"))
+    if part is None:
+        return ""
+    try:
+        body = part.get_content()
+    except LookupError:  # unknown charset
+        body = part.get_payload(decode=True).decode(errors="replace")
+    if part.get_content_type() == "text/html":
+        p = HTMLText()
+        p.feed(body)
+        body = "\n".join(" ".join(l.split()) for l in "".join(p.out).splitlines())
+    # Marketing mail pads its preview with invisible characters.
+    body = re.sub("[͏​-‍⁠﻿\xad]", "", body)
+    return re.sub(r"\n\s*\n\s*\n", "\n\n", body).strip()
+
+
+# Headers decoded as plain text: address parsing raises on crafted headers.
+TEXT = email.policy.default.clone(
+    header_factory=email.headerregistry.HeaderRegistry(use_default_map=False))
+
+
+def header(m, name):
+    # One line: a decoded newline must not start a header of its own.
+    v = next((v for k, v in m.raw_items() if k.lower() == name.lower()), "")
+    return " ".join(str(TEXT.header_fetch_parse(name, v)).split())
+
+
+def read(uid, box="INBOX"):
+    m = fetch(uid, box)
+    for h in ("From", "To", "Cc", "Reply-To", "Date", "Subject"):
+        if header(m, h):
+            print(f"{h}: {header(m, h)}")
+    files = [p.get_filename() for p in m.walk() if p.get_filename()]
+    if files:
+        print("Attachments:", ", ".join(files))
+    print()
+    print(text(m))
+
+
+def reply(uid, box="INBOX"):
+    m = fetch(uid, box)
+    subject = header(m, "Subject")
+    if not subject.lower().startswith("re:"):
+        subject = "Re: " + subject
+    try:  # parsed, so a name like "x Bcc: y@z" comes out quoted
+        to = (m["Reply-To"] or m["From"]).addresses
+    except (AttributeError, ValueError):
+        sys.exit("mailbox: can't parse the sender's address; write the draft by hand")
+    print("To:", ", ".join(map(str, to)))
+    print("Subject:", subject)
+    if header(m, "Message-ID"):
+        print("In-Reply-To:", header(m, "Message-ID"))
+        print("References:", (header(m, "References") + " " + header(m, "Message-ID")).strip())
+    print()
+    print(sys.stdin.read().rstrip())
+    print()
+    print(f"On {header(m, 'Date')}, {header(m, 'From')} wrote:")
+    print("\n".join(("> " + l).rstrip() for l in text(m).splitlines()))
+
+
+def send():
+    draft = email.message_from_string(sys.stdin.read(), policy=email.policy.default)
+    if not any(draft[h] for h in ("To", "Cc", "Bcc")):
+        sys.exit("mailbox: the draft has no To, Cc or Bcc")
+    m = email.message.EmailMessage()
+    for k, v in draft.items():
+        if k.lower() not in ("date", "message-id"):
+            m[k] = str(v)
+    if not m["From"]:
+        m["From"] = FROM
+    m["Date"] = email.utils.formatdate(localtime=True)
+    m["Message-ID"] = email.utils.make_msgid(domain=HOST)
+    m.set_content(draft.get_payload())
+    data = m.as_bytes()
+    ssh("/usr/sbin/sendmail -t -oi", data)
+    print("Sent", m["Message-ID"], flush=True)
+    try:
+        ssh("doveadm save -m Sent && doveadm flags add '\\Seen' mailbox Sent header Message-ID "
+            + shlex.quote(m["Message-ID"]), data)
+    except SystemExit:
+        sys.exit("mailbox: sent, but saving the copy in Sent failed; don't send it again")
+
+
+sys.stdout.reconfigure(errors="replace")  # undecodable mail text
+cmd, *args = sys.argv[1:] or ["list"]
+if cmd == "list":
+    box, *query = args or ["INBOX"]
+    sys.stdout.buffer.write(doveadm(
+        "-f", "tab", "fetch", "uid date.received flags hdr.from.utf8 hdr.subject.utf8",
+        "mailbox", box, *(query or ["savedsince", "3d"])))
+elif cmd == "read":
+    read(*args)
+elif cmd == "reply":
+    reply(*args)
+elif cmd == "send":
+    send()
+else:
+    sys.stdout.buffer.write(doveadm(cmd, *args))

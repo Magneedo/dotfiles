@@ -3,13 +3,14 @@ set -eu
 
 # The agents' own desktop: a headless dwl with its own seat, focus, pointer
 # and clipboard, so agents never touch the user's. "agentdesk start" starts
-# it when needed and shows it in a viewer on tag 10 (Mod+0), where the user
-# can watch and take over; "agentdesk stop" ends it. "agentdesk CMD..." runs
-# CMD on the desk, e.g. agentdesk grim shot.png. X11 apps go there too.
+# it when needed; "agentdesk view" also shows it in a viewer on tag 10 (Mod+0),
+# where the user can watch and take over; "agentdesk stop" ends it.
+# "agentdesk CMD..." runs CMD on the desk, e.g. agentdesk grim shot.png. X11
+# apps go there too.
 dir="$XDG_RUNTIME_DIR/agentdesk"
 
 case "${1-}" in
-start | stop)
+start | stop | view)
     # One start or stop at a time, so two agents can't race; flock -o keeps
     # the lock away from the desk's processes.
     mkdir -p "$dir"
@@ -32,9 +33,9 @@ vnc() {
 }
 
 case "${1-}" in
-start)
+start | view)
     if ! wayvncctl -S "$dir/ctl" version >/dev/null 2>&1; then
-        # A viewer of a dead server shows nothing; a fresh one opens below.
+        # A viewer of a dead server shows nothing.
         pkill -u "$(id -u)" -fx "$viewer" || true
         if wlr-randr >/dev/null 2>&1; then
             vnc
@@ -63,7 +64,7 @@ start)
             exit 1
         fi
     fi
-    pgrep -u "$(id -u)" -fx "$viewer" >/dev/null ||
+    [ "$1" = start ] || pgrep -u "$(id -u)" -fx "$viewer" >/dev/null ||
         setsid -f $viewer >/dev/null 2>&1
     ;;
 stop)

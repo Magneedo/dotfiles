@@ -9,6 +9,9 @@ set -eu
 # "Notify: summary" or "Notify: high|medium|approval|review | summary" to set
 # the summary and a label; a question starting "Approval:" is one. "review"
 # means the other builder is still reviewing the work.
+# Apps that bundle libraries (T3 Code) export a library path that breaks
+# notify-send.
+unset LD_LIBRARY_PATH
 jq -r --arg agent "$1" '
     def oneline: .[:1000] | gsub("[\\s\\x1f]+"; " ") | .[:160];
     ((.cwd // "") | split("/") | last // "" | oneline | gsub("[()]"; "")) as $dir |
@@ -81,7 +84,15 @@ jq -r --arg agent "$1" '
         ;;
     *) visible= ;;
     esac
-    [ -n "$visible" ] ||
+    # Pop-ups only show on this screen, so none while the phone is connected:
+    # Termius attaches brenbots' phone session, and the T3 Code app keeps a
+    # request open through T3 Connect's cloudflared tunnel (T3's own checks
+    # through it take under a second).
+    phone=$(tmux -L brenbots list-clients -t phone 2>/dev/null) || phone=
+    metrics=$(ss -Htlnp | awk '/"cloudflared"/ { print $4; exit }')
+    [ -z "$metrics" ] || phone=$phone$(curl -sm 2 "http://$metrics/metrics" |
+        awk '/^cloudflared_tunnel_concurrent_requests_per_tunnel / && $2 > 0')
+    [ -n "$visible$phone" ] ||
         notify-send -a agent -u "$urgency" "$title" >/dev/null 2>&1 || :
     printf -- '- %s **%s** (%s) %s\n' "$(date +'%F %-I:%M %p')" "$title" "$dir" \
         "$detail" >>"$HOME/Vault/Agents/Notifications.md"

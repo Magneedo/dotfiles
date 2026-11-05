@@ -9,23 +9,18 @@ for p in /sys/class/backlight/*; do
     fi
 done
 
-BAT_DIR=""
-for p in /sys/class/power_supply/*; do
-    [ -r "$p/type" ] || continue
-    IFS= read -r type < "$p/type" || type=""
-    if [ "$type" = "Battery" ]; then
-        BAT_DIR="$p"
-        break
-    fi
-done
-
+# Look up the battery each tick: it can register after statusd starts.
 bat_str() {
-    if [ -n "$BAT_DIR" ] && [ -r "$BAT_DIR/capacity" ]; then
-        IFS= read -r capacity < "$BAT_DIR/capacity" || capacity="n/a"
-        printf '%s%%' "$capacity"
-    else
-        printf 'n/a'
-    fi
+    for p in /sys/class/power_supply/*; do
+        [ -r "$p/type" ] || continue
+        IFS= read -r type < "$p/type" || type=""
+        if [ "$type" = "Battery" ] && [ -r "$p/capacity" ]; then
+            IFS= read -r capacity < "$p/capacity" || capacity="n/a"
+            printf '%s%%' "$capacity"
+            return
+        fi
+    done
+    printf 'n/a'
 }
 
 bright_str() {

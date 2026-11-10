@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+# Pick a live channel from OpenTV's list (refreshed whenever OpenTV starts)
+# and play it in mpv. Favourites first, then recently watched. The timeout
+# waits out OpenTV's refresh, which locks the database.
+sel=$(
+    sqlite3 -readonly -cmd '.timeout 10000' ~/.local/share/open-tv/db.sqlite \
+        "SELECT name || ' ' || url FROM channels WHERE media_type = 0 AND NOT hidden
+         ORDER BY favorite DESC, last_watched DESC, name" |
+        fzf --with-nth=..-2
+) || exit 0
+exec mpv --force-media-title="${sel% *}" "${sel##* }"

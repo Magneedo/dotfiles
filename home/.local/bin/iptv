@@ -1,13 +1,18 @@
 #!/bin/sh
 set -eu
 
-# Pick a live channel from OpenTV's list (refreshed whenever OpenTV starts)
-# and play it in mpv. Favourites first, then recently watched. The timeout
-# waits out OpenTV's refresh, which locks the database.
+# Pick a live channel in fzf and play it in mpv. The list comes fresh from
+# the provider's Xtream API, logged in with the account saved in OpenTV. The
+# timeout waits out OpenTV's refresh, which locks its database.
+IFS='|' read -r api user pass <<EOF
+$(sqlite3 -readonly -cmd '.timeout 10000' ~/.local/share/open-tv/db.sqlite \
+    "SELECT url, username, password FROM sources WHERE enabled LIMIT 1")
+EOF
 sel=$(
-    sqlite3 -readonly -cmd '.timeout 10000' ~/.local/share/open-tv/db.sqlite \
-        "SELECT name || ' ' || url FROM channels WHERE media_type = 0 AND NOT hidden
-         ORDER BY favorite DESC, last_watched DESC, name" |
+    curl -fsSG --data-urlencode "username=$user" --data-urlencode "password=$pass" \
+        -d action=get_live_streams "$api" |
+        jq -r --arg base "${api%/player_api.php}/live/$user/$pass" \
+            'arrays[] | "\(.name) \($base)/\(.stream_id).ts"' |
         fzf --with-nth=..-2
 ) || exit 0
 exec mpv --force-media-title="${sel% *}" "${sel##* }"

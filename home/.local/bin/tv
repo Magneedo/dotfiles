@@ -2,10 +2,10 @@
 set -eu
 
 # Pick a live channel in fzf and play it in mpv. The list comes fresh from
-# the provider's Xtream API, logged in with the account saved in OpenTV. The
-# timeout waits out OpenTV's refresh, which locks its database.
+# the provider's Xtream API, logged in with the account saved in brenTV. The
+# timeout waits out a brenTV refresh that holds its database.
 IFS='|' read -r api user pass <<EOF
-$(sqlite3 -readonly -cmd '.timeout 10000' ~/.local/share/open-tv/db.sqlite \
+$(sqlite3 -readonly -cmd '.timeout 10000' ~/.local/share/xyz.brendynmarroquin.brentv/db_rust.sqlite \
     "SELECT url, username, password FROM sources WHERE enabled LIMIT 1")
 EOF
 sel=$(

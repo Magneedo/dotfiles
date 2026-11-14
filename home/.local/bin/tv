@@ -1,18 +1,32 @@
 #!/bin/sh
 set -eu
 
-# Pick a live channel in fzf and play it in mpv. The list comes fresh from
-# the provider's Xtream API, logged in with the account saved in brenTV. The
-# timeout waits out a brenTV refresh that holds its database.
+# Pick a live channel, movie or series episode in fzf and play it in mpv. The
+# lists come fresh from the provider's Xtream API, logged in with the account
+# saved in brenTV. The timeout waits out a brenTV refresh that holds its database.
 IFS='|' read -r api user pass <<EOF
 $(sqlite3 -readonly -cmd '.timeout 10000' ~/.local/share/xyz.brendynmarroquin.brentv/db_rust.sqlite \
     "SELECT url, username, password FROM sources WHERE enabled LIMIT 1")
 EOF
+base=${api%/player_api.php}
+get() {
+    curl -fsSG --data-urlencode "username=$user" --data-urlencode "password=$pass" "$@" "$api"
+}
 sel=$(
-    curl -fsSG --data-urlencode "username=$user" --data-urlencode "password=$pass" \
-        -d action=get_live_streams "$api" |
-        jq -r --arg base "${api%/player_api.php}/live/$user/$pass" \
-            'arrays[] | "\(.name) \($base)/\(.stream_id).ts"' |
-        fzf --with-nth=..-2
+    {
+        get -d action=get_live_streams |
+            jq -r --arg b "$base/live/$user/$pass" 'arrays[] | "Live \(.name) \($b)/\(.stream_id).ts"'
+        get -d action=get_vod_streams |
+            jq -r --arg b "$base/movie/$user/$pass" 'arrays[] | "Movie \(.name) \($b)/\(.stream_id).\(.container_extension)"'
+        get -d action=get_series | jq -r 'arrays[] | "Series \(.name) \(.series_id)"'
+    } | fzf --with-nth=..-2
 ) || exit 0
-exec mpv --force-media-title="${sel% *}" "${sel##* }"
+case $sel in Series*)
+    sel=$(
+        get -d action=get_series_info -d "series_id=${sel##* }" |
+            jq -r --arg b "$base/series/$user/$pass" '.episodes[]?[] | "Episode \(.title) \($b)/\(.id).\(.container_extension)"' |
+            fzf --with-nth=2..-2
+    ) || exit 0
+esac
+title=${sel% *}
+exec mpv --force-media-title="${title#* }" "${sel##* }"

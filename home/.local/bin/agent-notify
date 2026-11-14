@@ -59,31 +59,43 @@ jq -r --arg agent "$1" '
     title="$1: $reason"
     [ -z "$level" ] || title="[$level] $title"
     # Agents read hook stdout, so keep it empty.
-    # A running tmux server alone does not mean its popup is visible.
+    # No pop-up while the agent's own front end shows it: the brenbots popup
+    # with this agent's window, or T3 Code for agents it started. A hidden
+    # brenbots agent still notifies while T3 Code is on screen.
     # Missing compositor state keeps notifications enabled.
     display=${WAYLAND_DISPLAY-}
     visible=$(cat "${XDG_RUNTIME_DIR:-/tmp}/dwl-visible-${display##*/}" 2>/dev/null) || visible=
-    case " $visible " in
-    *" brenbots "*)
-        # Claude's daemon drops TMUX and TMUX_PANE from background jobs, so
-        # take them from the nearest ancestor that has them.
-        p=$PPID
-        while [ -z "${TMUX_PANE-}" ] && [ "$p" -gt 1 ] 2>/dev/null; do
-            e=/proc/$p/environ
-            TMUX=$(sed -zn 's/^TMUX=//p' "$e" 2>/dev/null | tr -d '\0')
-            TMUX_PANE=$(sed -zn 's/^TMUX_PANE=//p' "$e" 2>/dev/null | tr -d '\0')
-            p=$(sed -n 's/^PPid:\s*//p' "/proc/$p/status" 2>/dev/null) || p=
-        done
-        export TMUX TMUX_PANE
-        # Alt+Tab can hide this agent inside an otherwise visible popup.
-        if [ -z "${TMUX-}" ] || [ -z "${TMUX_PANE-}" ] ||
-            ! tmux list-clients -t brenbots -F '#{pane_id}' 2>/dev/null |
-                grep -Fxq -- "${TMUX_PANE-}"; then
-            visible=
-        fi
-        ;;
-    *) visible= ;;
-    esac
+    # Claude's daemon drops TMUX and TMUX_PANE from background jobs, so take
+    # them from the nearest ancestor that has them. A brenbots pane wins over
+    # a T3 Code thread ID, which a brenbots started from T3 would inherit.
+    p=$PPID
+    while [ -z "${TMUX_PANE-}" ] && [ "$p" -gt 1 ] 2>/dev/null; do
+        e=/proc/$p/environ
+        TMUX=$(sed -zn 's/^TMUX=//p' "$e" 2>/dev/null | tr -d '\0')
+        TMUX_PANE=$(sed -zn 's/^TMUX_PANE=//p' "$e" 2>/dev/null | tr -d '\0')
+        p=$(sed -n 's/^PPid:\s*//p' "/proc/$p/status" 2>/dev/null) || p=
+    done
+    export TMUX TMUX_PANE
+    if [ -n "${TMUX_PANE-}" ]; then
+        # A running tmux server alone does not mean its popup is visible, and
+        # Alt+Tab can hide this agent inside an otherwise visible popup. Pane
+        # IDs are per server, so an unknown server (no TMUX) notifies.
+        case " $visible " in
+        *" brenbots "*)
+            [ -n "${TMUX-}" ] &&
+                tmux list-clients -t brenbots -F '#{pane_id}' 2>/dev/null |
+                grep -Fxq -- "$TMUX_PANE" || visible=
+            ;;
+        *) visible= ;;
+        esac
+    elif [ -n "${T3CODE_THREAD_ID-}" ]; then
+        case " $visible " in
+        *" com.t3tools.T3Code "*) ;;
+        *) visible= ;;
+        esac
+    else
+        visible=
+    fi
     # Pop-ups only show on this screen, so none while the phone is connected:
     # Termius attaches brenbots' phone session, and the T3 Code app keeps a
     # request open through T3 Connect's cloudflared tunnel (T3's own checks

@@ -60,7 +60,6 @@ noto-fonts-cjk
 noto-fonts-emoji
 noto-fonts-extra
 obs-studio
-open-tv-bin
 openbsd-netcat
 opendoas
 openssh

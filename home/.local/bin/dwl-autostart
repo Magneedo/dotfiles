@@ -53,8 +53,12 @@ fi
 foot --server >/dev/null 2>&1 &
 mako >"$logdir/mako.log" 2>&1 &
 "$HOME/.local/bin/wallpaper" >/dev/null 2>&1 &
-# Lock after 10 idle minutes and before elogind suspends (lid close).
-swayidle -w timeout 600 'swaylock -f' before-sleep 'swaylock -f' >/dev/null 2>&1 &
+# Lock after 10 idle minutes and before elogind suspends (lid close); half a
+# minute into the lock, turn the screens off until the next key or movement,
+# or until the laptop wakes from sleep.
+swayidle -w timeout 600 'swaylock -f' \
+    timeout 630 'wlopm --off \*' resume 'wlopm --on \*' \
+    before-sleep 'swaylock -f' after-resume 'wlopm --on \*' >/dev/null 2>&1 &
 
 (
     while ! pgrep -u "$uid" -x dwlb >/dev/null 2>&1; do

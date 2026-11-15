@@ -7,5 +7,6 @@ dbus
 dhcpcd
 nftables
 seatd
+tailscale
 udevd
 wpa_supplicant

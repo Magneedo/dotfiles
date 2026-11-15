@@ -160,6 +160,28 @@ net_str() {
     esac
 }
 
+# A watcher (this script again, in a process group of its own) keeps the volume
+# in a file and asks PipeWire only when a sink or the default output changes;
+# asking every tick cost more than everything else here together. It asks again
+# whenever PipeWire (re)starts.
+vol_save() { printf '%s\n' "$(vol_str)" > "$vol_file"; }
+if [ "${1-}" = watch ]; then
+    vol_file=$2
+    while :; do
+        vol_save
+        pactl subscribe 2>/dev/null | while read -r _ _ _ kind _; do
+            case "$kind" in sink | server) vol_save ;; esac
+        done
+        sleep 1
+    done
+fi
+vol_file=$(mktemp "${XDG_RUNTIME_DIR:-/tmp}/statusd-vol.XXXXXX")
+setsid "$0" watch "$vol_file" &
+watcher=$!
+trap 'kill -- "-$watcher" 2>/dev/null || :; rm -f "$vol_file"' EXIT
+# PIPE: the bar's reader went away.
+trap 'exit' HUP INT TERM PIPE
+
 bat="n/a"
 bri="n/a"
 vol="n/a"
@@ -168,7 +190,7 @@ net="off"
 tick=0
 
 while :; do
-    vol="$(vol_str)"
+    { IFS= read -r v < "$vol_file"; } 2>/dev/null && vol=$v
     bat="$(bat_str)"
     bri="$(bright_str)"
 

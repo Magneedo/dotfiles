@@ -46,11 +46,10 @@ start | view)
             size=$(WAYLAND_DISPLAY="$user_display" wlr-randr --json | jq -r '
                 [.[] | select(.enabled) | .scale as $s | .modes[] |
                  select(.current) | [.width / $s, .height / $s | floor]] |
-                min_by(.[0] * .[1]) | "\(.[0] - 6)x\(.[1] - 33)"')
-            if [ -z "$size" ]; then
-                echo "agentdesk: can't read the user's screen" >&2
-                exit 1
-            fi
+                min_by(.[0] * .[1]) | "\(.[0] - 6)x\(.[1] - 33)"' 2>/dev/null) || size=
+            # No monitor enabled (lid shut, user on the phone): use the
+            # laptop panel's tiled size (1920x1280 logical).
+            [ -n "$size" ] || size=1914x1247
             # The desk's socket goes in $dir, which Codex's sandbox may reach.
             # Its arrow is the agent emblem (other cursors are Adwaita's).
             # setsid: Codex kills a command's process group when it ends.
